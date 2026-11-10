@@ -126,8 +126,8 @@ async def ask(payload: AskRequest, request: Request) -> EventSourceResponse:
         timings: dict[str, Any] = {}
         saw_done = False
 
+        generator = engine.ask(question, conversation)
         try:
-            generator = engine.ask(question, conversation)
             async for kind, data in iterate_in_threadpool(generator):
                 # If the browser went away, stop pulling. Closing the
                 # generator unwinds httpx's stream context manager, which
@@ -155,6 +155,12 @@ async def ask(payload: AskRequest, request: Request) -> EventSourceResponse:
             outcome = "error:unexpected"
             yield error_frame("unexpected", str(exc))
         finally:
+            # Close the generator explicitly rather than waiting for GC.
+            # GeneratorExit unwinds httpx's `with stream(...)` block, which
+            # closes the upstream connection and makes Ollama abandon the
+            # generation. Without this, an orphaned generation keeps a core
+            # busy and blocks the next real question for ~a minute (R13).
+            generator.close()
             _slot.release()
             log_request(request_id, question, outcome, timings,
                         {"done_frame": saw_done,
