@@ -255,12 +255,12 @@ The pipeline needs three models resident at once: the 4B generator, `bge-m3` for
 | `python -m src.ingest --print` | Parse and dump every chunk for review | instant |
 | `python -m src.index` | Rebuild BM25 + vector indexes | ~45 s |
 | `python -m eval.eval_retrieval` | **Fast loop** — hit rate, no LLM | ~5-9 min |
-| `python -m eval.eval_answers` | Full loop — correctness + guardrails | ~50 min |
-| `python -m eval.eval_conversations` | The 3 multi-turn conversations | ~9 min |
+| `python -m eval.eval_answers` | Full loop — correctness + guardrails | ~30 min |
+| `python -m eval.eval_conversations` | The 3 multi-turn conversations | ~8 min |
 | `python -m eval.calibrate_floor` | Relevance-floor threshold sweep | ~6 min |
 | `python -m eval.report` | Write `eval/results/REPORT.md` | instant |
 | `python bench.py` | Measure prefill / generation / thread count | ~3 min |
-| `pytest` | Structural tests | ~2 min |
+| `pytest` | Structural tests (220) | ~75 s |
 | `pytest -m slow` | End-to-end guardrail behaviour (real LLM) | ~4 min |
 
 ## Latency
