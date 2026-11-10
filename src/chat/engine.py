@@ -27,7 +27,9 @@ from ..index.types import Hit
 from ..retrieve.pipeline import RetrievalResult, Retriever
 from .llm import LLMError, chat_stream
 from .memory import Conversation
-from .prompts import NO_ANSWER_TEXT, build_messages
+from ..ingest.sanitise import find_injections
+from .prompts import (NO_ANSWER_TEXT, PROMPT_EXTRACTION_REFUSAL,
+                      build_messages)
 from .rewrite import rewrite_query
 
 Event = tuple[str, dict[str, Any]]
@@ -100,6 +102,18 @@ class ChatEngine:
             yield "stage", {"stage": "truncated",
                             "message": f"Question truncated to "
                                        f"{config.MAX_INPUT_CHARS} characters."}
+
+        # --- prompt-extraction guard (plan M5) ----------------------------
+        # Checked on the QUESTION, using the same patterns that strip
+        # injections from documents at ingest. Answered before retrieval and
+        # before the LLM: the model cannot leak what it is never asked, and
+        # the refusal costs no prefill. This is a refusal, not a failure, so
+        # it travels as tokens and ends with a proper done frame.
+        if find_injections(question):
+            yield "token", {"text": PROMPT_EXTRACTION_REFUSAL}
+            yield "done", {"citations": [], "timings": timings.as_dict(),
+                           "reason": "prompt_extraction_refused"}
+            return
 
         # --- rewrite ------------------------------------------------------
         yield "stage", {"stage": "rewriting"}

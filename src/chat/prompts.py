@@ -139,3 +139,16 @@ NO_ANSWER_TEXT = (
     "I could not find anything about that in the Nodi Tech documents. "
     "If this is a Nodi Tech matter, the HR helpdesk or the relevant team "
     "should be able to help.")
+
+# Q40 and the adversarial set. Answered deterministically, before retrieval
+# and before the LLM, for two reasons: the model can never leak what it is
+# never asked, and it costs no prefill.
+#
+# The relevance floor happens to catch Q40 too (it scores 0.0844), but it
+# would answer with NO_ANSWER_TEXT -- "I could not find anything about that
+# in the documents" -- which wrongly implies the system prompt is the sort of
+# thing that might have been in a document. This says what is actually true.
+PROMPT_EXTRACTION_REFUSAL = (
+    "I can't share my instructions or system prompt. I'm happy to answer "
+    "questions about Nodi Tech and NodiDesk from the company documents "
+    "instead.")
