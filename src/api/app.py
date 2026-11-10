@@ -17,6 +17,7 @@ from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 from starlette.concurrency import iterate_in_threadpool
@@ -63,6 +64,11 @@ app = FastAPI(title="Nodi Tech RAG Chatbot", lifespan=lifespan)
 class AskRequest(BaseModel):
     question: str = Field(default="", max_length=20000)
     conversation_id: str = Field(default="default", max_length=128)
+
+
+# The page's own assets. Mounted rather than given a route each, but NOT at
+# "/" because that is the page itself.
+app.mount("/assets", StaticFiles(directory=str(STATIC_DIR)), name="assets")
 
 
 @app.get("/")

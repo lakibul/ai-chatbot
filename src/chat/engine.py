@@ -189,6 +189,16 @@ class ChatEngine:
             return
         timings.retrieve = time.time() - mark
 
+        # What the search actually did, for the step inspector. Counts only --
+        # no filenames, which belong to the sources list, not to progress.
+        yield "stage", {
+            "stage": "searched",
+            "lexical": result.stages.get("bm25_count", 0),
+            "vector": result.stages.get("vector_count", 0),
+            "candidates": result.stages.get("candidates", 0),
+            "ranking": result.stages.get("ranking", ""),
+        }
+
         for note in result.degraded:
             yield "stage", {"stage": "degraded", "message": note}
 
@@ -209,14 +219,20 @@ class ChatEngine:
                            "top_score": round(result.top_score, 4)}
             return
 
-        # Only the count. Streaming filenames while the user waits turns the
-        # progress panel into a debug log, and half of them are chunks the
-        # answer will not end up using anyway.
-        yield "stage", {"stage": "reading", "sources": len(result.hits)}
+        # The count, plus the DOCUMENT NAMES being read -- not filenames.
+        # These are only visible inside the collapsed step inspector, where
+        # knowing what is being consulted during a 40s wait is the point.
+        reading_titles: list[str] = []
+        for hit in result.hits:
+            title = display_title(hit.payload.get("doc_title", ""), hit.doc_id)
+            if title not in reading_titles:
+                reading_titles.append(title)
+        yield "stage", {"stage": "reading", "sources": len(result.hits),
+                        "titles": reading_titles}
 
         # --- generate -----------------------------------------------------
         messages = build_messages(question, result.hits, history)
-        yield "stage", {"stage": "writing"}
+        yield "stage", {"stage": "writing", "model": model or self.model}
 
         mark = time.time()
         answer_parts: list[str] = []
