@@ -182,9 +182,12 @@ Ready: 50 chunks indexed. http://127.0.0.1:8000
 ### 7. Verify the install
 
 ```bash
-pytest                                    # 220 tests, ~75 s
+pytest                                    # 220 tests
 curl http://127.0.0.1:8000/health         # must report "ok": true
 ```
+
+The **first** `pytest` takes ~3-4 minutes if it is what pulls the reranker
+down; afterwards it settles at ~75 s. All 220 must pass on a clean install.
 
 > **Stop the server before running `pytest` or anything in `eval/`.** Qdrant
 > local mode takes an exclusive file lock on `storage/qdrant`, so only one
@@ -205,6 +208,7 @@ curl http://127.0.0.1:8000/health         # must report "ok": true
 | `No matching distribution for onnxruntime` | Python 3.12+. Rebuild the venv from a 3.10/3.11 interpreter |
 | Answers take 50-80 s | Expected on CPU. See **Latency** |
 | Every answer says "cut off before it finished" | Stale cached `index.html`. Hard-reload (Ctrl+Shift+R) |
+| `huggingface_hub ... does not support symlinks` warning | Harmless on Windows. The cache works, it just uses a little more disk |
 | Out of memory / heavy swapping | Close the browser and other apps during eval runs; three models plus the reranker need ~7 GB |
 
 ### Moving the project to another machine
