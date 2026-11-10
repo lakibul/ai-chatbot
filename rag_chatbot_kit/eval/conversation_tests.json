@@ -1,0 +1,56 @@
+[
+  {
+    "id": "C1",
+    "turns": [
+      {
+        "user": "How many days of annual leave do I get?",
+        "expected": "18 days."
+      },
+      {
+        "user": "Can I carry some forward?",
+        "expected": "Yes, up to 5 days, used by 31 March.",
+        "note": "Needs query rewriting: 'carry forward annual leave'."
+      },
+      {
+        "user": "And what about sick leave?",
+        "expected": "Sick leave cannot be carried forward; 14 days per year.",
+        "note": "Must keep topic from earlier turns."
+      }
+    ]
+  },
+  {
+    "id": "C2",
+    "turns": [
+      {
+        "user": "What does the Growth plan cost?",
+        "expected": "BDT 2,500 per agent per month."
+      },
+      {
+        "user": "Does it have SSO?",
+        "expected": "No. SSO is Enterprise only.",
+        "note": "'it' = Growth plan."
+      },
+      {
+        "user": "What's its API limit?",
+        "expected": "60 requests per minute."
+      }
+    ]
+  },
+  {
+    "id": "C3",
+    "turns": [
+      {
+        "user": "I got error ND-1042.",
+        "expected": "Rate limit exceeded; wait Retry-After seconds."
+      },
+      {
+        "user": "How many requests can I make on Enterprise?",
+        "expected": "600 per minute."
+      },
+      {
+        "user": "How do I verify webhooks?",
+        "expected": "Check X-Nodi-Signature, an HMAC-SHA256 of the body with the webhook secret."
+      }
+    ]
+  }
+]
