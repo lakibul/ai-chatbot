@@ -164,8 +164,10 @@ python -m uvicorn src.api.app:app --port 8000
 
 Open **<http://127.0.0.1:8000>**.
 
-The **first question downloads the reranker** (~1.1 GB into `storage/models/`)
-and will take a couple of extra minutes. After that it is cached permanently.
+**The first thing that uses the reranker downloads it** — ~1.1 GB into
+`storage/models/`, a few extra minutes. That is whichever comes first: your
+first question, `pytest`, or any `eval/` script. After that it is cached
+permanently and never re-downloaded.
 
 On startup you should see eight green preflight checks:
 
