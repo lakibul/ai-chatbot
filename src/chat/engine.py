@@ -32,6 +32,7 @@ from ..ingest.sanitise import find_injections
 from .prompts import (NO_ANSWER_TEXT, PROMPT_EXTRACTION_REFUSAL,
                       build_messages)
 from .rewrite import rewrite_query
+from .smalltalk import smalltalk_reply
 
 Event = tuple[str, dict[str, Any]]
 
@@ -141,6 +142,21 @@ class ChatEngine:
             yield "stage", {"stage": "truncated",
                             "message": f"Question truncated to "
                                        f"{config.MAX_INPUT_CHARS} characters."}
+
+        # --- conversational fast path -------------------------------------
+        # Measured: "hello" cost 27.6s, of which 21.3s was the model reading
+        # five retrieved policy chunks it had no use for. Answered here, it
+        # costs nothing. Only fires when the WHOLE message is a pleasantry.
+        canned = smalltalk_reply(question)
+        if canned is not None:
+            yield "token", {"text": canned}
+            if conversation is not None:
+                conversation.add_user(question)
+                conversation.add_assistant(canned)
+            timings.total = time.time() - started
+            yield "done", {"citations": [], "timings": timings.as_dict(),
+                           "reason": "smalltalk"}
+            return
 
         # --- prompt-extraction guard (plan M5) ----------------------------
         # Checked on the QUESTION, using the same patterns that strip
