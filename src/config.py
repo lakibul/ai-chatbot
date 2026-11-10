@@ -118,9 +118,20 @@ CODE_BOOST = _env_float("CODE_BOOST", 1000.0)
 # Plan 4.1: superseded chunks are demoted, never deleted -- Q29 must cite both.
 SUPERSEDED_MULTIPLIER = _env_float("SUPERSEDED_MULTIPLIER", 0.5)
 
-# Plan 4.6 / M5: calibrated by sweep against the eval set, never guessed.
-# This placeholder is replaced by a measured value in M5.
-RELEVANCE_FLOOR = _env_float("RELEVANCE_FLOOR", 0.0)
+# Plan 4.6 / M5: CALIBRATED BY SWEEP against the eval set, never guessed.
+# `python -m eval.calibrate_floor` measured the top-1 reranker score for all
+# 40 questions:
+#   in-scope (36): min 0.1193, max 0.8672
+#   out-of-scope : Q35 0.0358, Q36 0.0374, Q40 0.0844, Q37 0.3952
+# The knee is 0.11 -- the highest floor keeping every in-scope question. 0.088
+# is 80% of that, leaving a 36% margin below the weakest real question while
+# still refusing Q35, Q36 and Q40 on score alone.
+#
+# Q37 ("Does NodiDesk integrate with WhatsApp?") scores 0.3952 and CANNOT be
+# refused by any usable threshold -- the pricing channels row really is
+# relevant to it. That is exactly what plan 4.6 predicted, and why Q37 is
+# handled by the absence-is-not-denial prompt rule instead.
+RELEVANCE_FLOOR = _env_float("RELEVANCE_FLOOR", 0.088)
 
 RERANKER_MODEL = _env("RERANKER_MODEL", "jinaai/jina-reranker-v2-base-multilingual")
 RERANKER_FALLBACK = _env("RERANKER_FALLBACK", "Xenova/ms-marco-MiniLM-L-6-v2")

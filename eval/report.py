@@ -160,8 +160,12 @@ def build(answers_path: Path, retrieval: dict | None = None) -> str:
         out.append("")
 
     out.append("## Audit\n")
+    try:
+        shown = answers_path.resolve().relative_to(ROOT).as_posix()
+    except ValueError:
+        shown = answers_path.as_posix()
     out.append(f"Every verdict, including the judge's reasoning, is in "
-               f"`{answers_path.relative_to(ROOT).as_posix()}`. A 4B judge is not "
+               f"`{shown}`. A 4B judge is not "
                f"trustworthy unaudited (plan R7), so hard assertions on the exact "
                f"numbers (18, 6000, 1000, 25000, ND-1042, X-Nodi-Key) run first "
                f"and override it.\n")

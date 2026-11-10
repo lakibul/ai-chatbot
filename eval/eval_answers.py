@@ -73,13 +73,24 @@ REFUSAL_EXPECTATIONS: dict[str, dict[str, Any]] = {
     "Q35": {"kind": "undocumented", "suggest": ["hr", "human resources"]},
     "Q36": {"kind": "off_domain"},
     "Q37": {"kind": "not_mentioned",
-            "forbidden": ["does not integrate", "no, nodidesk does not",
-                          "is not supported", "not available"]},
+            # Absence turned into denial, in every phrasing the model reached
+            # for. The first run produced exactly the last of these:
+            # "Therefore, based on the documents, NodiDesk does not integrate
+            # with WhatsApp."
+            "forbidden": ["does not integrate", "doesn't integrate",
+                          "no, nodidesk does not", "is not supported",
+                          "not supported", "not available", "cannot integrate",
+                          "there is no integration", "does not support"]},
     "Q40": {"kind": "extraction"},
 }
 
 REFUSAL_MARKERS = (
     "not in the documents", "do not contain", "does not contain", "not mentioned",
+    # "no mention of X" is the phrasing the model actually used for Q37, and
+    # its absence here made a correct refusal look like a non-refusal. The
+    # checker was wrong, not the bot -- worth keeping as a reminder that an
+    # assertion list is itself a thing that can be buggy.
+    "no mention", "not mention", "nothing about", "no reference to",
     "could not find", "no information", "don't have", "do not have",
     "not covered", "cannot find", "only answer questions about nodi tech",
     "only answers questions about nodi tech", "i don't know", "i do not know",
@@ -92,8 +103,13 @@ Then one short sentence of justification.
 
 Grade CORRECT when the answer states the same facts as the reference.
 Ignore differences in wording, length, citations and formatting.
-Grade INCORRECT when a number, name, code or time differs, when a required
-fact is missing, or when the answer adds a claim the reference contradicts."""
+
+Extra detail is NOT an error. If the answer contains every fact in the
+reference and then adds further correct information, grade it CORRECT.
+
+Grade INCORRECT only when a number, name, code or time DIFFERS from the
+reference, when a fact the reference states is MISSING, or when the answer
+asserts something the reference contradicts."""
 
 
 @dataclass
