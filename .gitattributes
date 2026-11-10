@@ -20,9 +20,22 @@
 *.bat   text eol=crlf
 *.ps1   text eol=crlf
 
+# The source dataset is immutable ground truth. Pin it to LF so the
+# working tree stays byte-identical to rag_chatbot_kit.zip on every
+# platform, regardless of the local core.autocrlf setting. Without this,
+# a Windows checkout rewrites all 13 text files to CRLF and they no
+# longer checksum against the pristine archive.
+rag_chatbot_kit/**  text eol=lf
+
+# ...except this one file, which the kit genuinely ships with CRLF
+# (41 CRLF, 0 bare LF). Pinning each file to its original style is what
+# keeps the checksum test at a clean 15/15.
+rag_chatbot_kit/eval/eval_questions.csv  text eol=crlf
+
 # Binary — never line-ending-converted, never diffed as text.
 # expense_reimbursement_policy.pdf MUST stay byte-exact: it is parsed
 # by coordinate, so a single altered byte would corrupt table extraction.
+# These rules come last so they override the dataset glob above.
 *.pdf   binary
 *.zip   binary
 *.png   binary
