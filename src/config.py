@@ -43,6 +43,10 @@ EVAL_DIR = ROOT / "rag_chatbot_kit" / "eval"
 STORAGE_DIR = ROOT / "storage"
 
 QDRANT_PATH = STORAGE_DIR / "qdrant"
+# FastEmbed defaults to %TEMP%\fastembed_cache, which Windows disk cleanup is
+# entitled to delete -- and re-downloading the reranker costs 1.1 GB. Keep it
+# with the rest of the project's (gitignored) state instead.
+MODEL_CACHE_DIR = STORAGE_DIR / "models"
 BM25_PATH = STORAGE_DIR / "bm25.pkl"
 CHUNKS_PATH = STORAGE_DIR / "chunks.json"
 SANITISED_LOG = STORAGE_DIR / "sanitised.log"

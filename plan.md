@@ -431,7 +431,7 @@ Contextual retrieval (an LLM-written context line per chunk — **measure the hi
 ## 7. Repository layout
 
 ```
-C:\Chatbot\
+C:\ai-chatbot\
 ├─ plan.md                  <- this file
 ├─ .env.example / .env      <- .env gitignored (brief rule 5)
 ├─ .gitignore               <- .env, storage/, .venv/, __pycache__/
