@@ -1,0 +1,31 @@
+# Normalise line endings in the repository (LF), while letting Windows
+# check out CRLF where the local core.autocrlf setting asks for it.
+* text=auto
+
+# Source data and docs — UTF-8 text. The Bangla document and the BOM'd
+# eval CSV are plain UTF-8 and need no special handling beyond this.
+*.md    text
+*.csv   text
+*.json  text
+*.py    text
+*.yml   text
+*.yaml  text
+*.txt   text
+*.html  text
+*.css   text
+*.js    text
+
+# Scripts keep the line endings their interpreter expects
+*.sh    text eol=lf
+*.bat   text eol=crlf
+*.ps1   text eol=crlf
+
+# Binary — never line-ending-converted, never diffed as text.
+# expense_reimbursement_policy.pdf MUST stay byte-exact: it is parsed
+# by coordinate, so a single altered byte would corrupt table extraction.
+*.pdf   binary
+*.zip   binary
+*.png   binary
+*.jpg   binary
+*.gguf  binary
+*.onnx  binary

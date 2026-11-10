@@ -1,0 +1,60 @@
+# ─────────────────────────────────────────────────────────────
+# Secrets  (project brief, rule 5: keep secrets out of the code)
+# ─────────────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ─────────────────────────────────────────────────────────────
+# Python
+# ─────────────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.ipynb_checkpoints/
+
+# ─────────────────────────────────────────────────────────────
+# Generated indexes and runtime state  (rebuildable: `python -m src.ingest`)
+# Leading slash anchors to repo root so nothing inside
+# rag_chatbot_kit/ is ever caught by these.
+# ─────────────────────────────────────────────────────────────
+/storage/
+*.log
+
+# ─────────────────────────────────────────────────────────────
+# Evaluation output  (NOT rag_chatbot_kit/eval/ — that is source data)
+# ─────────────────────────────────────────────────────────────
+/eval/results/
+
+# ─────────────────────────────────────────────────────────────
+# Model weights and caches — never commit these (GBs, and re-pullable)
+# ─────────────────────────────────────────────────────────────
+.cache/
+.fastembed_cache/
+local_cache/
+models/
+*.gguf
+*.onnx
+*.safetensors
+*.bin
+
+# ─────────────────────────────────────────────────────────────
+# Editors / OS
+# ─────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+desktop.ini
+.DS_Store
