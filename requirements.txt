@@ -1,0 +1,24 @@
+# Nodi Tech RAG Chatbot — Python 3.10.6, CPU-only, fully local.
+
+# --- API + streaming ---
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+sse-starlette==2.2.1
+httpx==0.28.1
+python-dotenv==1.0.1
+
+# --- Vector store (local mode, no Docker — plan 2.3) ---
+qdrant-client==1.12.2
+
+# --- Lexical search (plan 2.4) ---
+rank-bm25==0.2.2
+
+# --- Reranker: ONNX cross-encoder, no PyTorch (plan 2.5) ---
+fastembed==0.5.1
+
+# --- PDF parsing: coordinate-aware (plan 2.6) ---
+pdfplumber==0.11.5
+
+# --- Tests ---
+pytest==8.3.4
+pytest-asyncio==0.25.2
