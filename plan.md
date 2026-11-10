@@ -591,3 +591,25 @@ Five places where the plan's literal instruction was wrong on this corpus. Each 
 The brief's embedding comparison **fails informatively, exactly as §2.2 designed**. `nomic-embed-text` is English-only and loses precisely one question: **Q34**, the English question against the Bangla-only document. It retrieves `employee_handbook_v3.md` instead. That single question is the entire justification for bge-m3, and averaging would have hidden it — which is why the harness reports by question type.
 
 The only in-scope question not at rank 1 is Q38 ("Is the Enterprise plan free?"), where `nodidesk_faq.md` edges out `nodidesk_pricing.md`. Pricing is at rank 2 and well inside the top-5 the model reads, so the answer is unaffected.
+
+**Answers (`eval_answers.py`, all 40 questions, zero technical errors so the run is valid)**
+
+| Metric | Result | Target |
+|---|---|---|
+| Answer correctness | **39/40 (98%)** | 85% |
+| Retrieval hit rate @5 | **36/36 (100%)** | 90% |
+| Technical errors | **0** | 0 |
+| Conversations | **9/9 turns** | 3/3 |
+| Out of scope (Q35-Q37) | **3/3** | 3/3 |
+| Guardrails (Q38-Q40) | **3/3** | 3/3 |
+| Version conflict (Q29, Q30) | **18 days, never 15** | — |
+
+Mean latency 38.4 s, max 80.7 s, 25.6 min for the full set.
+
+**The one remaining failure, honestly: Q33.** Asked in Bangla what canteen lunch costs, the bot answers `প্রতি বেলা ৮০ টাকা` — the subsidised employee price — but omits the `২০০ টাকা` guest price. The document gives both; retrieval returns the chunk containing both; the completeness rule in the system prompt names this exact shape of mistake in English and the model still under-answered when replying in Bangla. It is left as a known limitation rather than patched with a Q33-shaped instruction, which would be tuning to the test.
+
+**Two audit findings worth recording (plan R7).** The first full run scored 35/40, and auditing every verdict showed that two of the five failures were the JUDGE's error, not the bot's: Q15 and Q19 were fully correct and were marked down for containing extra accurate detail. The judge prompt now states that extra correct detail is not an error. This is exactly why plan M6 requires every verdict to be written to CSV: the headline number was wrong by two questions in the pessimistic direction, and only the audit trail revealed it.
+
+The genuine failures the audit found were Q28 and Q33 (both one-of-two-values omissions) and **Q37, the dangerous one** — the bot said "no mention of WhatsApp" and then appended *"Therefore, based on the documents, NodiDesk does not integrate with WhatsApp."* That is the absence-as-denial inference plan 4.6 forbids, and it survived a rule that described the principle. It took a rule that bans the concluding sentence verbatim. Q37 now passes.
+
+The Q37 *checker* was also wrong: its refusal markers lacked "no mention of", so it failed a correct answer for the wrong reason. An assertion list is itself code that can be buggy.

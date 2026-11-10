@@ -4,7 +4,17 @@ A fully local, citation-backed question-answering chatbot over the internal docu
 
 Every answer cites the document it came from. When the documents don't cover a question, the bot says so instead of guessing. Nothing leaves the machine — no cloud LLM, no API keys.
 
-> **Status:** built and evaluated. See [`eval/results/REPORT.md`](eval/results/REPORT.md) for the measured numbers and [`plan.md` §11](plan.md) for the build log, including every place reality contradicted the plan.
+> **Status:** built and evaluated.
+>
+> | Metric | Result | Target |
+> |---|---|---|
+> | Retrieval hit rate @5 | **36/36 (100%)** | 90% |
+> | Answer correctness | **39/40 (98%)** | 85% |
+> | Technical errors | **0** | 0 |
+> | Multi-turn conversations | **9/9 turns** | 3/3 |
+> | Out of scope + guardrails | **6/6** | 6/6 |
+>
+> Full report: [`eval/results/REPORT.md`](eval/results/REPORT.md). Build log, including every place reality contradicted the plan: [`plan.md` §11](plan.md).
 
 ---
 
