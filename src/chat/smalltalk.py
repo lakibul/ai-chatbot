@@ -31,6 +31,19 @@ FAREWELL_REPLY = "Goodbye. I'm here whenever you need the documents checked."
 
 ACK_REPLY = "Noted. What else can I look up for you?"
 
+WELLBEING_REPLY = (
+    "I'm working fine, thank you. Ask me anything about Nodi Tech's policies "
+    "or NodiDesk and I'll find it in the documents.")
+
+CAPABILITY_REPLY = (
+    "I answer questions from Nodi Tech's internal documents and cite where "
+    "each answer came from. I cover HR policy (leave, probation, remote work, "
+    "notice periods), IT security, expense reimbursement, office transport and "
+    "canteen, and the NodiDesk product — plans and pricing, the user guide, "
+    "the REST API, error codes and release notes.\n\n"
+    "I only use those documents. If something isn't in them I'll say so rather "
+    "than guess. You can ask in English or Bangla.")
+
 _GREETINGS = {
     "hi", "hii", "hiii", "hello", "helo", "hallo", "hey", "heya", "hiya", "yo",
     "hi there", "hello there", "hey there",
@@ -61,11 +74,41 @@ _ACKS = {
     "আচ্ছা", "ঠিক আছে",
 }
 
+# Phrases that LOOK like questions but are conversational. These are matched
+# in full, before the substantive-content filter below, because that filter
+# rejects anything containing "how", "are", "what" or a question mark -- which
+# is every one of these.
+#
+# This is why "how are you?" used to be answered with the out-of-scope
+# refusal: the fast path rejected it, retrieval found nothing above the
+# relevance floor, and the floor cannot tell a pleasantry from a question
+# about something the documents genuinely do not cover.
+_WELLBEING = {
+    "how are you", "how are you doing", "how are you today", "how r u",
+    "how do you do", "hows it going", "how is it going", "how's it going",
+    "you ok", "you good", "are you ok", "are you there", "whats up",
+    "what's up", "sup", "কেমন আছেন", "কেমন আছো",
+}
+
+_CAPABILITY = {
+    "who are you", "what are you", "what can you do", "what do you do",
+    "what can i ask", "what can i ask you", "what can you help with",
+    "how can you help", "how can you help me", "what is this", "help",
+    "what do you know", "what documents do you have", "how do you work",
+    "আপনি কে", "আপনি কি করতে পারেন",
+}
+
 # Anything that makes a message a real request, however short, disqualifies it.
-_SUBSTANTIVE = re.compile(r"[?؟৷।]|\b(what|how|when|where|who|why|which|"
+# Question marks are NOT a signal here: every conversational phrase above
+# carries one, and the match is exact-set anyway, so a real question can only
+# short-circuit if it is literally one of those phrases.
+_SUBSTANTIVE = re.compile(r"\b(what|how|when|where|who|why|which|"
                           r"can|does|do|is|are|should|tell|show|list|find|give)\b", re.I)
 
-_STRIP = re.compile(r"[!.,…~\-–—*\"'()\[\]:;]+")
+# Apostrophes are DELETED rather than turned into a space: replacing them
+# splits "how's it going" into "how s it going", which matches nothing.
+_APOSTROPHE = re.compile(r"['‘’ʼ`]")
+_STRIP = re.compile(r"[!?.,…~\-–—*\"()\[\]:;؟৷।]+")
 
 
 def _normalise(text: str) -> str:
@@ -73,6 +116,7 @@ def _normalise(text: str) -> str:
     # Drop emoji and symbols; a waving hand is still just a greeting.
     text = "".join(ch for ch in text
                    if not unicodedata.category(ch).startswith("S"))
+    text = _APOSTROPHE.sub("", text)
     text = _STRIP.sub(" ", text)
     return " ".join(text.split())
 
@@ -82,6 +126,18 @@ def smalltalk_reply(message: str) -> str | None:
     cleaned = _normalise(message)
     if not cleaned or len(cleaned) > 40:
         return None
+
+    # Checked FIRST, on the whole message, because every one of these would be
+    # thrown out by the substantive-content filter below.
+    if cleaned in _WELLBEING:
+        return WELLBEING_REPLY
+    if cleaned in _CAPABILITY:
+        return CAPABILITY_REPLY
+
+    paired = _paired(cleaned)
+    if paired is not None:
+        return paired
+
     if _SUBSTANTIVE.search(cleaned):
         return None
 
@@ -94,11 +150,22 @@ def smalltalk_reply(message: str) -> str | None:
     if cleaned in _ACKS:
         return ACK_REPLY
 
-    # "hi thanks" and the like: a pair of pleasantries is still a pleasantry.
+    return None
+
+
+def _paired(cleaned: str) -> str | None:
+    """"hi how are you" is a greeting followed by a pleasantry, not a question."""
     words = cleaned.split()
-    if 2 <= len(words) <= 4:
-        for first in range(1, len(words)):
-            left, right = " ".join(words[:first]), " ".join(words[first:])
-            if left in _GREETINGS and right in (_THANKS | _GREETINGS | _ACKS):
-                return GREETING_REPLY
+    if not 2 <= len(words) <= 7:
+        return None
+    for first in range(1, len(words)):
+        left, right = " ".join(words[:first]), " ".join(words[first:])
+        if left not in _GREETINGS:
+            continue
+        if right in _WELLBEING:
+            return WELLBEING_REPLY
+        if right in _CAPABILITY:
+            return CAPABILITY_REPLY
+        if right in (_THANKS | _GREETINGS | _ACKS):
+            return GREETING_REPLY
     return None

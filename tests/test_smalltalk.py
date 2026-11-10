@@ -126,3 +126,64 @@ def test_engine_still_runs_the_pipeline_for_a_greeting_plus_question(monkeypatch
         "hello, how many days of annual leave do I get?")
     assert result["answer"] == "18 days."
     assert result["citations"], "a real question must still be grounded"
+
+
+# ----------------------------------- phrases that LOOK like questions --------
+@pytest.mark.parametrize("message", [
+    "how are you", "How are you?", "how are you doing?", "how's it going",
+    "hows it going", "what's up", "sup", "are you ok", "how do you do",
+    "কেমন আছেন?",
+])
+def test_wellbeing_is_answered_not_refused(message):
+    """Regression: "how are you?" was answered with the out-of-scope refusal.
+
+    The fast path rejected it (it contains "how", "are" and a question mark),
+    retrieval then scored below the relevance floor, and the floor cannot
+    tell a pleasantry from a question the documents genuinely do not cover.
+    """
+    from src.chat.smalltalk import WELLBEING_REPLY
+    assert smalltalk_reply(message) == WELLBEING_REPLY
+
+
+@pytest.mark.parametrize("message", [
+    "who are you", "Who are you?", "what are you", "what can you do?",
+    "what do you do", "how can you help", "help", "what is this",
+    "what can I ask you?",
+])
+def test_capability_questions_get_a_real_answer(message):
+    from src.chat.smalltalk import CAPABILITY_REPLY
+    assert smalltalk_reply(message) == CAPABILITY_REPLY
+
+
+def test_capability_reply_describes_the_actual_corpus():
+    from src.chat.smalltalk import CAPABILITY_REPLY
+    lowered = CAPABILITY_REPLY.lower()
+    for topic in ("leave", "security", "expense", "nodidesk", "api"):
+        assert topic in lowered, topic
+    # It must not promise anything beyond the documents.
+    assert "cite" in lowered or "document" in lowered
+
+
+def test_greeting_plus_pleasantry_combinations():
+    from src.chat.smalltalk import CAPABILITY_REPLY, WELLBEING_REPLY
+    assert smalltalk_reply("hi, how are you?") == WELLBEING_REPLY
+    assert smalltalk_reply("Hello! How are you?") == WELLBEING_REPLY
+    assert smalltalk_reply("hey, what can you do?") == CAPABILITY_REPLY
+
+
+@pytest.mark.parametrize("message", [
+    # The dangerous near-misses: a pleasantry PREFIX on a real question.
+    "how are you going to handle my claim?",
+    "what can you do about my expired claim?",
+    "who are the approvers for a BDT 30,000 claim?",
+    "what are you supposed to do when a ticket is P1?",
+    "how are leave days carried forward?",
+    "how are passwords stored?",
+    "what are the office hours?",
+    "help me find the API rate limit",
+    "what do you do when a webhook fails?",
+])
+def test_near_misses_still_run_the_full_pipeline(message):
+    """Exact-set matching is what keeps these safe. A prefix match here would
+    silently refuse real questions."""
+    assert smalltalk_reply(message) is None, message
