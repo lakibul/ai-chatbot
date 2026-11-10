@@ -227,3 +227,103 @@ def test_extraction_guard_does_not_fire_on_real_questions():
         # proves the guard did not short-circuit it.
         assert result["answer"] != PROMPT_EXTRACTION_REFUSAL, question
         assert result["error"]["code"] == "retrieval_failed", question
+
+
+# -------------------------------- 6. what the reader is shown vs. cited ----
+def test_display_titles_are_document_names_not_filenames():
+    """The UI lists sources by name. A wall of *.md filenames makes a cited
+    answer read like debug output."""
+    from src.chat.engine import display_title
+
+    assert display_title("Nodi Tech Ltd. - Employee Handbook",
+                         "employee_handbook_v3.md") == "Employee Handbook"
+    assert display_title("NodiDesk - API Error Codes",
+                         "nodidesk_error_codes.md") == "API Error Codes"
+    # Unknown shapes pass through rather than being mangled.
+    assert display_title("Notice from PrintCare Services (vendor)",
+                         "vendor_notice_printer.md") == \
+        "Notice from PrintCare Services (vendor)"
+    # No title at all falls back to something rather than an empty chip.
+    assert display_title("", "nodidesk_faq.md") == "nodidesk_faq.md"
+
+
+def test_citations_carry_clean_titles_and_superseded_status(chunks):
+    from src.chat.engine import citations_from
+    from src.index.types import Hit
+
+    hits = [
+        Hit(chunk_id="a", score=0.9, stage="rerank", payload={
+            "doc_id": "employee_handbook_v3.md", "section": "3. Leave",
+            "doc_title": "Nodi Tech Ltd. - Employee Handbook",
+            "text": "x", "embed_text": "x", "status": "current"}),
+        Hit(chunk_id="b", score=0.4, stage="rerank", payload={
+            "doc_id": "leave_policy_v2.1_2024_SUPERSEDED.md", "section": "Annual leave",
+            "doc_title": "Nodi Tech Ltd. - Leave Policy",
+            "text": "y", "embed_text": "y", "status": "superseded"}),
+    ]
+    cites = citations_from(hits)
+    assert [c["title"] for c in cites] == ["Employee Handbook", "Leave Policy"]
+    assert [c["status"] for c in cites] == ["current", "superseded"]
+    assert not any(c["title"].endswith(".md") for c in cites)
+
+
+def test_reading_stage_does_not_stream_filenames(monkeypatch):
+    """Filenames scrolling past during a 50s wait turn the progress panel
+    into a debug log."""
+    import httpx
+
+    from src.chat.engine import ChatEngine
+    from tests.test_errors import FakeStream, StubRetriever
+    from src.chat import llm as llm_module
+
+    lines = ['{"message":{"content":"18 days."}}', '{"done":true}']
+    monkeypatch.setattr(llm_module.httpx, "stream",
+                        lambda *a, **k: FakeStream(lines))
+
+    result = ChatEngine(StubRetriever()).ask_sync("How much leave?")
+    reading = [s for s in result["stages"] if s.get("stage") == "reading"]
+    assert reading, "the reading stage must still be emitted"
+    assert "documents" not in reading[0]
+    assert reading[0]["sources"] >= 1
+
+
+def test_sources_are_narrowed_to_what_the_answer_cited():
+    """Retrieval supplies five chunks; a one-line answer uses one. Listing
+    all five makes the provenance look indiscriminate."""
+    from src.chat.engine import used_citations
+
+    cites = [
+        {"doc_id": "expense_reimbursement_policy.pdf", "title": "Expense Policy"},
+        {"doc_id": "nodidesk_pricing.md", "title": "Plans and Pricing"},
+        {"doc_id": "nodidesk_faq.md", "title": "Customer FAQ"},
+    ]
+    answer = ("The hotel limit outside Dhaka is BDT 6,000 per night. "
+              "[expense_reimbursement_policy.pdf]")
+    assert [c["doc_id"] for c in used_citations(answer, cites)] == \
+        ["expense_reimbursement_policy.pdf"]
+
+
+def test_multiple_cited_documents_are_all_kept():
+    from src.chat.engine import used_citations
+
+    cites = [{"doc_id": "a.md", "title": "A"}, {"doc_id": "b.md", "title": "B"},
+             {"doc_id": "c.md", "title": "C"}]
+    answer = "Both apply. [a.md] [c.md]"
+    assert [c["doc_id"] for c in used_citations(answer, cites)] == ["a.md", "c.md"]
+
+
+def test_uncited_answer_falls_back_to_everything_retrieved():
+    """Showing what it read is honest; showing nothing silently loses
+    provenance."""
+    from src.chat.engine import used_citations
+
+    cites = [{"doc_id": "a.md", "title": "A"}, {"doc_id": "b.md", "title": "B"}]
+    assert used_citations("18 days, no citation given.", cites) == cites
+    assert used_citations("", cites) == cites
+
+
+def test_unknown_citation_marker_does_not_empty_the_list():
+    from src.chat.engine import used_citations
+
+    cites = [{"doc_id": "a.md", "title": "A"}]
+    assert used_citations("See [not_retrieved.md]", cites) == cites

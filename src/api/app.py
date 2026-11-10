@@ -102,7 +102,27 @@ async def health() -> JSONResponse:
 @app.post("/reset")
 async def reset(payload: AskRequest) -> JSONResponse:
     state["store"].reset(payload.conversation_id)
+    state["store"].save()
     return JSONResponse({"ok": True})
+
+
+@app.get("/conversations")
+async def list_conversations() -> JSONResponse:
+    """Sidebar index: titles and timestamps only, never transcripts."""
+    return JSONResponse({"conversations": state["store"].summaries()})
+
+
+@app.get("/conversations/{conversation_id}")
+async def get_conversation(conversation_id: str) -> JSONResponse:
+    conversation = state["store"].find(conversation_id)
+    if conversation is None:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    return JSONResponse(conversation.to_dict())
+
+
+@app.delete("/conversations/{conversation_id}")
+async def delete_conversation(conversation_id: str) -> JSONResponse:
+    return JSONResponse({"deleted": state["store"].delete(conversation_id)})
 
 
 @app.post("/ask")
@@ -161,6 +181,11 @@ async def ask(payload: AskRequest, request: Request) -> EventSourceResponse:
             # generation. Without this, an orphaned generation keeps a core
             # busy and blocks the next real question for ~a minute (R13).
             generator.close()
+            if outcome == "ok":
+                # Persist once per completed answer, so the sidebar and the
+                # model's own memory of a conversation survive a restart
+                # together.
+                state["store"].save()
             _slot.release()
             log_request(request_id, question, outcome, timings,
                         {"done_frame": saw_done,

@@ -18,6 +18,7 @@ event types.
 """
 from __future__ import annotations
 
+import re
 import time
 from dataclasses import dataclass, field
 from typing import Any, Iterator
@@ -52,12 +53,50 @@ class Timings:
                 "total_s": round(self.total, 2), **self.extra}
 
 
+def display_title(raw_title: str, doc_id: str) -> str:
+    """A document name a person would recognise, not a filename.
+
+    The UI shows these instead of "employee_handbook_v3.md": a filename is an
+    implementation detail, and a wall of them makes a cited answer look like
+    debug output rather than a reference.
+    """
+    title = (raw_title or "").strip()
+    for prefix in ("Nodi Tech Ltd. - ", "Nodi Tech Ltd. — ",
+                   "NodiDesk - ", "NodiDesk — "):
+        if title.startswith(prefix):
+            title = title[len(prefix):]
+            break
+    return title or doc_id
+
+
+_CITE_MARKER = re.compile(r"\[([^\[\]\n]+?\.(?:md|pdf))\]", re.I)
+
+
+def used_citations(answer: str, citations: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Narrow the source list to the documents the answer actually cited.
+
+    Retrieval hands the model five chunks; a one-line answer typically uses
+    one. Listing all five makes the citation look indiscriminate, which is
+    worse than useless for a tool whose whole claim is that it tells you
+    where a number came from.
+
+    If the model cited nothing recognisable, every retrieved document is
+    listed rather than none: showing what it read is honest, showing nothing
+    would be a silent loss of provenance.
+    """
+    named = {m.group(1).strip().lower() for m in _CITE_MARKER.finditer(answer or "")}
+    if not named:
+        return citations
+    used = [c for c in citations if c["doc_id"].lower() in named]
+    return used or citations
+
+
 def citations_from(hits: list[Hit]) -> list[dict[str, Any]]:
     seen: dict[str, dict[str, Any]] = {}
     for hit in hits:
         entry = seen.setdefault(hit.doc_id, {
             "doc_id": hit.doc_id,
-            "title": hit.payload.get("doc_title", hit.doc_id),
+            "title": display_title(hit.payload.get("doc_title", ""), hit.doc_id),
             "sections": [],
             "status": hit.status,
             "score": round(hit.score, 4),
@@ -154,8 +193,10 @@ class ChatEngine:
                            "top_score": round(result.top_score, 4)}
             return
 
-        yield "stage", {"stage": "reading", "sources": len(result.hits),
-                        "documents": [h.doc_id for h in result.hits]}
+        # Only the count. Streaming filenames while the user waits turns the
+        # progress panel into a debug log, and half of them are chunks the
+        # answer will not end up using anyway.
+        yield "stage", {"stage": "reading", "sources": len(result.hits)}
 
         # --- generate -----------------------------------------------------
         messages = build_messages(question, result.hits, history)
@@ -214,11 +255,12 @@ class ChatEngine:
                             "message": "The model returned an empty answer."}
             return
 
+        citations = used_citations(answer, citations_from(result.hits))
         if conversation is not None:
             conversation.add_user(question)
-            conversation.add_assistant(answer)
+            conversation.add_assistant(answer, citations)
 
-        yield "done", {"citations": citations_from(result.hits),
+        yield "done", {"citations": citations,
                        "timings": timings.as_dict(),
                        "degraded": result.degraded}
 
