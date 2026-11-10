@@ -18,10 +18,16 @@ from pathlib import Path
 INJECTION_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("system_note_to_ai", re.compile(
         r"system\s+note\s+to\s+(ai|assistant|llm|bot)", re.I)),
+    # The temporal word ("previous", "above") is OPTIONAL: a bare "ignore your
+    # instructions" is just as much an injection. A determiner or possessive
+    # is required instead, which is what keeps ordinary prose like
+    # "Instructions for creating a ticket are in the user guide" clear of it.
     ("ignore_previous", re.compile(
-        r"\b(ignore|disregard|forget)\s+(all\s+|any\s+|the\s+)*"
-        r"(of\s+your\s+|your\s+)?(previous|prior|above|preceding|earlier|former)\s+"
-        r"(instruction|direction|rule|prompt|command)", re.I)),
+        r"\b(ignore|disregard|forget)\s+"
+        r"(?:(?:all|any|the|these|those)\s+)*"
+        r"(?:of\s+)?(?:your|my|its)?\s*"
+        r"(?:(?:previous|prior|above|preceding|earlier|former)\s+)?"
+        r"(instruction|direction|rule|prompt|command)s?\b", re.I)),
     ("reveal_prompt", re.compile(
         r"\b(print|show|reveal|output|repeat|display|dump)\b[^.\n]{0,40}?"
         r"\b(system\s+prompt|your\s+instructions|the\s+text\s+above)", re.I)),

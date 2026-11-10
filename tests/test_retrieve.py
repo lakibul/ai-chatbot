@@ -229,3 +229,55 @@ def test_scores_are_calibrated_probabilities(retriever):
     result = retriever.retrieve("What are the core hours?", top_k=5)
     for hit in result.hits:
         assert 0.0 <= hit.score <= 1.0, hit.score
+
+
+# ------------------------------------------- candidate-selection guarantee --
+def test_vector_certainty_survives_bm25_noise(retriever):
+    """Regression for the Q34 architecture bug.
+
+    RRF counts ranks only, so a document present in BOTH lists outranks one
+    that is rank 1 in a single list. For an English question against the
+    Bangla-only document, BM25 returns twenty plausible English documents and
+    cannot match a single Bangla token, which pushed the correct answer from
+    vector rank 1 to fused rank 13. Reserved seats in the rerank window are
+    what make this deterministic rather than a near miss.
+    """
+    from src import config
+    from src.index.vector import search as vector_search
+    from src.retrieve.code_boost import apply_code_boost
+    from src.retrieve.rrf import reciprocal_rank_fusion
+
+    question = "What time does the return office bus leave?"
+    target = "office_transport_canteen_bn.md"
+
+    lexical = retriever.bm25.search(question, top_k=config.BM25_TOP_K)
+    vector = vector_search(question, top_k=config.VECTOR_TOP_K,
+                           client=retriever.client)
+
+    # Preconditions: this test is meaningless if they stop holding.
+    assert vector[0].doc_id == target, "vector must be certain here"
+    assert all(h.doc_id != target for h in lexical), \
+        "BM25 cannot match Bangla, so it must miss the target entirely"
+
+    fused = apply_code_boost(question, reciprocal_rank_fusion([lexical, vector]))
+    fused_rank = next(i for i, h in enumerate(fused, 1) if h.doc_id == target)
+    assert fused_rank > config.GUARANTEED_PER_RETRIEVER, \
+        "fusion is expected to bury the target; that is the point of the test"
+
+    candidates = retriever._select_candidates(fused, lexical, vector)
+    assert len(candidates) <= config.RERANK_CANDIDATES
+    assert any(h.doc_id == target for h in candidates), \
+        "the reserved seat must put the target in front of the cross-encoder"
+
+
+def test_candidate_window_respects_its_budget(retriever):
+    result = retriever.retrieve("What are the standard office hours?", top_k=5)
+    from src import config
+    assert result.stages["candidates"] <= config.RERANK_CANDIDATES
+
+
+def test_code_boosted_chunk_is_never_dropped_from_the_window(retriever):
+    """An exact identifier match is certainty; reserved seats must not evict it."""
+    result = retriever.retrieve("What does error ND-4000 mean?", top_k=5)
+    assert result.hits[0].doc_id == "nodidesk_error_codes.md"
+    assert "ND-4000" in result.hits[0].text

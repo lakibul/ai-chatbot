@@ -90,6 +90,47 @@ class Retriever:
             result.degraded.append(f"vector search failed, BM25 only ({exc})")
             return []
 
+    def _select_candidates(self, ranked: list[Hit], lexical: list[Hit],
+                           vector: list[Hit]) -> list[Hit]:
+        """Choose the rerank window, reserving seats for each retriever's best.
+
+        Plain `ranked[:N]` loses a document that one retriever is CERTAIN
+        about whenever the other retriever returns plausible noise, because
+        RRF rewards appearing in both lists over ranking first in one. That is
+        not a hypothetical: for "What time does the return office bus leave?"
+        the Bangla document is vector rank 1 at 0.724 -- far clear of the 0.532
+        runner-up -- while BM25, which cannot match a single Bangla token,
+        still returns twenty English documents. Fusion buried the right answer
+        at rank 13.
+
+        The cross-encoder resolves it decisively once it sees it (0.674 against
+        0.069), so the fix is simply to guarantee it gets looked at.
+        """
+        limit = config.RERANK_CANDIDATES
+        by_id = {hit.chunk_id: hit for hit in ranked}
+        position = {hit.chunk_id: i for i, hit in enumerate(ranked)}
+
+        picked: list[str] = []
+
+        def take(chunk_id: str) -> None:
+            if chunk_id in by_id and chunk_id not in picked and len(picked) < limit:
+                picked.append(chunk_id)
+
+        # An exact identifier match is certainty, not a guess: never drop it.
+        for hit in ranked:
+            if hit.debug.get("code_boost"):
+                take(hit.chunk_id)
+
+        for source in (vector, lexical):
+            for hit in source[:config.GUARANTEED_PER_RETRIEVER]:
+                take(hit.chunk_id)
+
+        for hit in ranked:
+            take(hit.chunk_id)
+
+        # Hand them to the reranker in fused order, for determinism.
+        return [by_id[cid] for cid in sorted(picked, key=lambda c: position[c])]
+
     # ----------------------------------------------------------- retrieve --
     def retrieve(self, query: str, top_k: int | None = None) -> RetrievalResult:
         top_k = top_k or config.FINAL_TOP_K
@@ -108,7 +149,7 @@ class Retriever:
 
         fused = reciprocal_rank_fusion([lexical_hits, vector_hits])
         boosted = apply_code_boost(query, fused)
-        candidates = boosted[:config.RERANK_CANDIDATES]
+        candidates = self._select_candidates(boosted, lexical_hits, vector_hits)
         result.stages["candidates"] = len(candidates)
 
         if not self.use_reranker:

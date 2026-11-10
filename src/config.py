@@ -82,7 +82,11 @@ REQUIRED_MODELS = (LLM_MODEL, DEV_LLM_MODEL, EMBED_MODEL)
 # on this hardware, not tuning preferences.
 NUM_GPU = _env_int("NUM_GPU", 0)          # force CPU: a 2 GB GT 1030 cannot hold a 4B Q4
 NUM_CTX = _env_int("NUM_CTX", 4096)       # the tag advertises 256K; that KV cache would OOM 16 GB
-NUM_THREAD = _env_int("NUM_THREAD", 4)    # 4 physical Zen+ cores; M0 benchmarks 4 vs 8
+NUM_THREAD = _env_int("NUM_THREAD", 8)    # measured: SMT HELPS prefill here
+# The plan expected SMT to hurt llama.cpp on Zen+ and it does not. bench.py on
+# a 1,162-token prompt: 8 threads prefill in 48.6s (23.9 tok/s) against 60.5s
+# (19.2 tok/s) at 4 threads -- a 20% saving on the dominant cost. Generation is
+# a wash (5.83 vs 5.74 tok/s). Measured, not guessed, exactly as plan 2.1 asked.
 KEEP_ALIVE = _env("KEEP_ALIVE", "30m")    # avoid a 10-20 s reload per request
 TEMPERATURE = _env_float("TEMPERATURE", 0.1)   # extractive QA, not creativity
 
@@ -96,7 +100,15 @@ CHUNK_OVERLAP_CHARS = _env_int("CHUNK_OVERLAP_CHARS", 150)
 BM25_TOP_K = _env_int("BM25_TOP_K", 20)
 VECTOR_TOP_K = _env_int("VECTOR_TOP_K", 20)
 RRF_K = _env_int("RRF_K", 60)
-RERANK_CANDIDATES = _env_int("RERANK_CANDIDATES", 20)
+RERANK_CANDIDATES = _env_int("RERANK_CANDIDATES", 12)
+
+# Seats in the rerank window reserved for each retriever's own top results,
+# regardless of where RRF put them. Measured need: for Q34 (English question,
+# Bangla-only document) BM25 returns NOISE rather than nothing, and because
+# RRF counts only ranks, a document present in both lists outranks one that
+# is rank 1 in a single list. The correct document fell from vector rank 1 to
+# fused rank 13. See Retriever._select_candidates.
+GUARANTEED_PER_RETRIEVER = _env_int("GUARANTEED_PER_RETRIEVER", 3)
 FINAL_TOP_K = _env_int("FINAL_TOP_K", 5)
 
 # Plan 4.3: an exact code match outranks anything a cross-encoder believes.

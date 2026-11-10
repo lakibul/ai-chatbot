@@ -77,6 +77,18 @@ def _payload(messages: list[dict[str, str]], model: str, stream: bool,
         "stream": stream,
         "options": options,
         "keep_alive": config.KEEP_ALIVE,
+        # MEASURED, not precautionary. qwen3:1.7b -- the plan's own choice of
+        # rewrite/dev model -- IS a thinking model: without this flag it spent
+        # all 40 rewrite tokens on reasoning and returned message.content = "".
+        # The rewriter then silently fell back to the raw question on every
+        # turn, so C1's "Can I carry some forward?" was never resolved.
+        #
+        # This is precisely the failure plan 2.1 rejected qwen3.5 over, and it
+        # is also why that section insists on the native /api/chat endpoint:
+        # verified here on Ollama 0.40.16 that `think: false` is honoured on
+        # /api/chat, which the open issues say it is not on /v1.
+        # Harmless for qwen3:4b-instruct-2507, which has no thinking template.
+        "think": False,
     }
 
 

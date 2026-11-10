@@ -26,31 +26,27 @@ from src import config                      # noqa: E402
 from src.chat.llm import LLMError, chat     # noqa: E402
 from src.ingest.build import load_chunks    # noqa: E402
 
-SYSTEM = (
-    "You are a helpful assistant for Nodi Tech Ltd. Answer only from the "
-    "documents provided. Cite the document you used. If the documents do not "
-    "contain the answer, say so plainly."
-)
 QUESTION = "How many days of annual leave do employees get, and how many can be carried forward?"
 
 
 def build_prompt(target_chunks: int = 5) -> list[dict[str, str]]:
-    """A prompt shaped like the real thing: system rules + fenced chunks."""
+    """The REAL prompt, not an approximation of it.
+
+    Uses the production system prompt and document framing so the measured
+    token count is the one the server actually pays for.
+    """
     try:
         chunks = load_chunks()
     except FileNotFoundError:
         print("storage/chunks.json missing -- run: python -m src.ingest", file=sys.stderr)
         raise SystemExit(1)
 
-    picked = chunks[:target_chunks]
-    blocks = "\n\n".join(
-        f'<document id="{c.doc_id}" section="{c.section}">\n{c.embed_text}\n</document>'
-        for c in picked
-    )
-    return [
-        {"role": "system", "content": SYSTEM},
-        {"role": "user", "content": f"{blocks}\n\nQuestion: {QUESTION}"},
-    ]
+    from src.index.types import Hit
+    from src.chat.prompts import build_messages
+
+    hits = [Hit(chunk_id=c.chunk_id, score=1.0, payload=c.to_dict(), stage="bench")
+            for c in chunks[:target_chunks]]
+    return build_messages(QUESTION, hits)
 
 
 def gpu_memory_used() -> str:
@@ -73,6 +69,20 @@ def gpu_processes() -> str:
         return out.stdout.strip() or "(no compute processes)"
     except Exception:                       # noqa: BLE001
         return "unavailable"
+
+
+def warm_up(model: str, threads: int) -> None:
+    """Load the model WITHOUT priming the KV cache for the measured prompt.
+
+    This is not a detail. An earlier version of this script warmed up with the
+    SAME messages it then measured, so llama.cpp served the measured run from
+    its cached prefix and reported 4,100 tok/s of "prefill" -- a 200x
+    overstatement that made prefill look free. The warm-up prompt must share
+    no prefix with the real one.
+    """
+    chat([{"role": "system", "content": "You are a calculator."},
+          {"role": "user", "content": "What is 2+2? Reply with the digit only."}],
+         model=model, num_predict=4, options={"num_thread": threads})
 
 
 def run_once(messages: list[dict[str, str]], model: str, threads: int,
@@ -117,7 +127,7 @@ def main(argv: list[str] | None = None) -> int:
     for threads in args.threads:
         print(f"--- num_thread={threads} (warm-up + measured run) ---")
         try:
-            run_once(messages, args.model, threads, 8)       # warm up / load
+            warm_up(args.model, threads)
             row = run_once(messages, args.model, threads, args.num_predict)
         except LLMError as exc:
             print(f"  FAILED: {exc}", file=sys.stderr)

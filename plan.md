@@ -515,3 +515,79 @@ Consequences now locked in:
 **M0 setup (§8)** — install Ollama, pull the four models (~5.4 GB), create the venv, and run the three smoke tests in step 6 before any pipeline code is written. Not started; awaiting go-ahead.
 
 Milestone order is now: M0 -> M1 -> M2 -> M3 -> M4 -> **M4.5** -> M5 -> M6.
+
+---
+
+## 11. Measured reality — build log, 2026-11-10
+
+This section is appended by the implementation, not by the planner. Sections 1-10 are left exactly as approved; everything below is what the hardware and the corpus actually did. Where a number here contradicts an estimate above, **this section is the one to trust.**
+
+### 11.1 Environment corrections
+
+| Plan said | Actually |
+|---|---|
+| Repo at `C:\Chatbot\` | `C:\ai-chatbot\` — corrected in §7 |
+| GPU: 89 MiB free | 1,233 MiB free. **Decision unchanged** — a 4B Q4 needs ~2.5 GB — but it *strengthens* the case for an explicit `num_gpu: 0`, because Ollama now has enough free VRAM to attempt a partial offload |
+| Chunk count ~70-90 | **50.** Sections are the natural unit and all but the tables are small; splitting further would hurt |
+| Ollama absent | Installed 0.40.16 via winget; models total 5.0 GB on disk |
+
+`OLLAMA_MAX_LOADED_MODELS=2` is a **real constraint, not just an optimisation**: the pipeline wants three models resident (4B generator, bge-m3 embedder, 1.7b rewriter). Two of the three stay hot; the third reloads on use.
+
+### 11.2 Performance — measured, replacing §5's estimates
+
+| Stage | §5 estimate | Measured | Verdict |
+|---|---|---|---|
+| Index all 12 docs | 60-90 s | **41 s** | better |
+| Query rewrite (1.7b) | 1-3 s | ~2-4 s | correct |
+| BM25 search | <100 ms | **~0 ms** | correct |
+| Vector search incl. query embed | <100 ms | **205 ms** | close |
+| Rerank **20** candidates | 1-2 s | **8.6 s** | **4-8x worse** |
+| LLM prefill | 40-70 s | **48.6 s @ 1,162 tok** (19-24 tok/s) | **correct** |
+| LLM generation | ~7 tok/s | **5.8 tok/s** | slightly worse |
+| Total per answer | 60-90 s | **36-86 s cold** | **correct** |
+
+**Prefill is the bottleneck, exactly as §5.2 predicted, so R1 is real and the staged progress indicator is load-bearing.**
+
+> A first benchmark appeared to show prefill running at 4,100 tok/s, which would have made prefill free and R1 void. That measurement was wrong: `bench.py` warmed up with the *same* prompt it then measured, so llama.cpp served the measured run from its cached KV prefix. `bench.py` now warms up on an unrelated prompt. The lesson generalises — **a repeated question really does return in ~9 s** because the prefix cache is genuine; only *cold* prompts cost 50 s.
+
+**`num_thread`: 8, not 4.** §2.1 expected SMT to hurt llama.cpp on Zen+. It does not. On a 1,162-token prompt, 8 threads prefill in 48.6 s (23.9 tok/s) against 60.5 s (19.2 tok/s) at 4 — a **20% saving on the dominant cost**. Generation is a wash (5.83 vs 5.74 tok/s). `NUM_THREAD=8`.
+
+**§5.1's fast harness is slower than claimed.** `eval_retrieval.py` was budgeted at 30-60 s; it actually takes **5-9 minutes**, because reranking dominates. It is still ~5x faster than the answer eval and remains the right iteration loop, but the split is less dramatic than planned.
+
+### 11.3 Risks closed by measurement
+
+| Risk | Outcome |
+|---|---|
+| **R3** pdfplumber mis-joins PDF columns | **Closed.** pdfplumber derives cell edges from the 48 filled rects on its own; the *default* strategy recovers the header and all five limit rows with correct columns. The coordinate-clustering plan B was never needed. |
+| **R6** Ollama offloads to the GT 1030 | **Closed.** `nvidia-smi --query-compute-apps` never lists Ollama. The one unnamed GPU process is `dwm`. |
+| **R8** FastEmbed lacks the multilingual reranker | **Closed.** `jinaai/jina-reranker-v2-base-multilingual` is listed in FastEmbed 0.5.1 (1.11 GB). |
+| **R9** CC-BY-NC licence | **Confirmed**, `cc-by-nc-4.0`. Non-commercial only; `BAAI/bge-reranker-base` (MIT) is the listed fallback. |
+| **R14** index silently missing the PDF | **Closed by construction.** Ingestion asserts 12 files, all 5 limit rows, the BDT 25,000 threshold, exactly one superseded document, exactly one injection, and one Bangla document — exiting non-zero otherwise. |
+
+### 11.4 Deviations from the plan, and why
+
+Five places where the plan's literal instruction was wrong on this corpus. Each is annotated at the code site.
+
+1. **§4.3's identifier pattern would miss `X-Nodi-Key`.** The plan proposes `[A-Za-z]{2,}-[A-Za-z0-9]{2,}`, requiring two letters before the hyphen. That excludes `X-Nodi-Key` (Q18) and `X-Request-Id` (Q19). The tokeniser allows a single leading letter.
+
+2. **§4.1's `x0.5` superseded multiplier would have *promoted* superseded chunks.** Cross-encoder outputs are logits and are frequently negative — measured −0.31 for a correct document and −3.04 for an irrelevant one. Multiplying −0.31 by 0.5 yields −0.15, which ranks *higher*. Scores are squashed through a monotonic sigmoid first, which changes no ordering, makes the multiplier mean what the plan intended, and hands M5 a calibrated 0-1 number to threshold.
+
+3. **RRF actively buries the one document Q34 depends on.** §4.5 assumes "BM25 will score zero — there is no lexical overlap whatsoever." It does not score zero; it scores *noise*, because English function words appear in every English document. Since RRF counts only ranks, a document present in *both* lists outranks one that is rank 1 in a single list. The Bangla document is vector rank 1 at 0.724 — clear of the 0.532 runner-up — yet fell to **fused rank 13**, surviving only because 13 < 20. The rerank window now reserves seats for each retriever's own top results, so the cross-encoder always sees it; it then resolves the question decisively (0.674 against 0.069). Q34 passes by design rather than by luck.
+
+4. **Rerank candidates cut from 20 to 12.** Measured cost is ~0.43 s per candidate, so 20 candidates cost 8.6 s of every answer. With reserved seats, 12 candidates hold hit rate at 36/36 and rank-1 at 35/36 while saving ~3.5 s per question.
+
+5. **`qwen3:1.7b-q4_K_M` is a thinking model.** §2.1 rejected qwen3.5 precisely to avoid thinking-mode failures, then named a thinking model for rewriting and dev. Without intervention it spent all 40 rewrite tokens reasoning and returned `message.content = ""`, so the rewriter silently fell back to the raw question on *every* turn and C1's "Can I carry some forward?" was never resolved. Fixed with `"think": false` — which, exactly as §2.1 argued, **is honoured on the native `/api/chat`** (verified on Ollama 0.40.16). The 1.7b also needed few-shot examples; without them it emitted URL slugs (`/what-about-sick-leave`).
+
+### 11.5 Results
+
+**Retrieval (`eval_retrieval.py`, 36 in-scope questions)**
+
+| Embedder | Hit rate @5 | Rank-1 | cross_language (Q34) |
+|---|---|---|---|
+| bge-m3, vector only | 36/36 (100%) | 31/36 | 1/1 |
+| **bge-m3, hybrid + rerank** | **36/36 (100%)** | **35/36** | **1/1** |
+| nomic-embed-text, hybrid + rerank | 35/36 (97%) | 34/36 | **0/1** |
+
+The brief's embedding comparison **fails informatively, exactly as §2.2 designed**. `nomic-embed-text` is English-only and loses precisely one question: **Q34**, the English question against the Bangla-only document. It retrieves `employee_handbook_v3.md` instead. That single question is the entire justification for bge-m3, and averaging would have hidden it — which is why the harness reports by question type.
+
+The only in-scope question not at rank 1 is Q38 ("Is the Enterprise plan free?"), where `nodidesk_faq.md` edges out `nodidesk_pricing.md`. Pricing is at rank 2 and well inside the top-5 the model reads, so the answer is unaffected.
