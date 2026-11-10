@@ -7,224 +7,213 @@
 <style>
   /* No external fonts or CDNs anywhere: the project must work offline. */
   :root{
-    --bg:#ffffff; --side:#f6f6f5; --raise:#fbfbfa;
-    --ink:#1c1e21; --ink-2:#44484e; --muted:#73787f;
-    --line:#e5e5e2; --line-2:#efefed;
-    --accent:#1f5fa9; --accent-ink:#ffffff; --accent-soft:#eaf0f8;
-    --warn:#8a6412; --warn-bg:#fdf6e6; --warn-line:#e8d9ae;
-    --err:#9a2432; --err-bg:#fdeff0; --err-line:#eccdd1;
-    --ok:#2e7d55;
-    --r:6px;
+    --bg:#faf9f5; --side:#f0eee6; --raise:#ffffff; --bubble:#efece3;
+    --ink:#262521; --ink-2:#4a4740; --muted:#736e64;
+    --line:#e4e0d6; --line-2:#edeae1;
+    --accent:#262521; --accent-ink:#faf9f5; --active:#e6e2d7;
+    --warn:#8a6412; --warn-bg:#fbf4e4; --warn-line:#e6d6ae;
+    --err:#8f2a33; --err-bg:#fbeeef; --err-line:#e8ccd0;
+    --ok:#3f7d5c;
   }
   @media (prefers-color-scheme:dark){
     :root:not([data-theme="light"]){
-      --bg:#1b1b19; --side:#151513; --raise:#212120;
-      --ink:#ececeb; --ink-2:#c2c3c1; --muted:#8d8f8c;
-      --line:#302f2c; --line-2:#272624;
-      --accent:#6ea8e8; --accent-ink:#0d1a28; --accent-soft:#1b2a3c;
-      --warn:#d8b265; --warn-bg:#2a2317; --warn-line:#4b3f23;
-      --err:#e59aa3; --err-bg:#2b1a1c; --err-line:#4c2b30;
-      --ok:#5fb98a;
+      --bg:#262624; --side:#1d1d1b; --raise:#30302e; --bubble:#3a3a37;
+      --ink:#f0eee6; --ink-2:#cfccc3; --muted:#948f85;
+      --line:#3a3a37; --line-2:#323230;
+      --accent:#f0eee6; --accent-ink:#262624; --active:#35352f;
+      --warn:#d9b872; --warn-bg:#2c2518; --warn-line:#4a3f26;
+      --err:#e8a0a8; --err-bg:#2e1b1d; --err-line:#4d2d31;
+      --ok:#6cb892;
     }
   }
   :root[data-theme="dark"]{
-    --bg:#1b1b19; --side:#151513; --raise:#212120;
-    --ink:#ececeb; --ink-2:#c2c3c1; --muted:#8d8f8c;
-    --line:#302f2c; --line-2:#272624;
-    --accent:#6ea8e8; --accent-ink:#0d1a28; --accent-soft:#1b2a3c;
-    --warn:#d8b265; --warn-bg:#2a2317; --warn-line:#4b3f23;
-    --err:#e59aa3; --err-bg:#2b1a1c; --err-line:#4c2b30;
-    --ok:#5fb98a;
+    --bg:#262624; --side:#1d1d1b; --raise:#30302e; --bubble:#3a3a37;
+    --ink:#f0eee6; --ink-2:#cfccc3; --muted:#948f85;
+    --line:#3a3a37; --line-2:#323230;
+    --accent:#f0eee6; --accent-ink:#262624; --active:#35352f;
+    --warn:#d9b872; --warn-bg:#2c2518; --warn-line:#4a3f26;
+    --err:#e8a0a8; --err-bg:#2e1b1d; --err-line:#4d2d31;
+    --ok:#6cb892;
   }
 
   *{box-sizing:border-box;}
   html,body{height:100%;margin:0;}
   body{
     background:var(--bg); color:var(--ink);
-    font:15px/1.62 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,
+    font:15.5px/1.7 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,
          "Helvetica Neue",Arial,"Noto Sans Bengali",sans-serif;
-    letter-spacing:-.005em; -webkit-font-smoothing:antialiased;
+    letter-spacing:-.003em; -webkit-font-smoothing:antialiased;
   }
   button{font:inherit;color:inherit;}
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);}
 
   .app{display:flex;height:100%;overflow:hidden;}
 
-  /* ------------------------------------------------------------ sidebar */
+  /* ----------------------------------------------------------- sidebar  */
   .sidebar{
-    width:258px; flex:none; background:var(--side);
+    width:262px;flex:none;background:var(--side);
+    display:flex;flex-direction:column;min-height:0;
     border-right:1px solid var(--line);
-    display:flex; flex-direction:column; min-height:0;
   }
-  .side-head{padding:14px 12px 10px;}
+  .side-head{padding:15px 13px 10px;}
   .brand{
-    display:flex; align-items:center; gap:9px; padding:0 4px 13px;
-    font-size:13px; font-weight:600; color:var(--ink); letter-spacing:-.01em;
+    display:flex;align-items:center;gap:9px;padding:0 5px 14px;
+    font-size:13.5px;font-weight:600;letter-spacing:-.01em;
   }
   .brand i{
-    width:20px;height:20px;border-radius:4px;flex:none;display:grid;
+    width:21px;height:21px;border-radius:5px;flex:none;display:grid;
     place-items:center;background:var(--ink);color:var(--bg);
     font-size:10px;font-weight:700;font-style:normal;
   }
   .newchat{
-    width:100%; display:flex; align-items:center; gap:8px;
-    background:var(--bg); border:1px solid var(--line); color:var(--ink);
-    border-radius:var(--r); padding:7px 10px; cursor:pointer;
-    font-size:13.5px; font-weight:500; text-align:left;
-    transition:border-color .12s,background .12s;
+    width:100%;display:flex;align-items:center;gap:9px;
+    background:transparent;border:1px solid var(--line);color:var(--ink);
+    border-radius:9px;padding:8px 11px;cursor:pointer;
+    font-size:13.5px;font-weight:500;text-align:left;
+    transition:background .12s,border-color .12s;
   }
-  .newchat:hover{border-color:var(--muted);}
-  .newchat svg{width:14px;height:14px;opacity:.75;flex:none;}
+  .newchat:hover{background:var(--raise);border-color:var(--muted);}
+  .newchat svg{width:14px;height:14px;opacity:.7;flex:none;}
 
-  .convos{flex:1;overflow-y:auto;padding:4px 8px 12px;min-height:0;}
+  .convos{flex:1;overflow-y:auto;padding:4px 9px 14px;min-height:0;}
   .grouplabel{
-    font-size:11px; font-weight:600; color:var(--muted); letter-spacing:.03em;
-    text-transform:uppercase; padding:14px 8px 5px;
+    font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.04em;
+    text-transform:uppercase;padding:15px 8px 5px;
   }
   .convo{
-    display:flex; align-items:center; gap:6px; width:100%;
-    padding:6px 8px; border-radius:var(--r); cursor:pointer;
-    border:0; background:transparent; text-align:left;
-    font-size:13.5px; color:var(--ink-2); line-height:1.4;
+    display:flex;align-items:center;gap:6px;width:100%;
+    padding:7px 9px;border-radius:7px;cursor:pointer;
+    border:0;background:transparent;text-align:left;
+    font-size:13.5px;color:var(--ink-2);line-height:1.45;
   }
-  .convo:hover{background:var(--line-2);}
-  .convo.active{background:var(--accent-soft);color:var(--ink);font-weight:500;}
+  .convo:hover{background:var(--active);}
+  .convo.active{background:var(--active);color:var(--ink);font-weight:500;}
   .convo span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .convo .del{
     width:20px;height:20px;flex:none;border:0;background:transparent;
-    color:var(--muted);border-radius:4px;cursor:pointer;display:none;
-    place-items:center;
+    color:var(--muted);border-radius:4px;cursor:pointer;display:none;place-items:center;
   }
   .convo:hover .del{display:grid;}
-  .convo .del:hover{color:var(--err);background:var(--bg);}
+  .convo .del:hover{color:var(--err);}
   .convo .del svg{width:12px;height:12px;}
-  .empty-note{font-size:12.5px;color:var(--muted);padding:10px 8px;}
+  .empty-note{font-size:12.5px;color:var(--muted);padding:12px 9px;}
 
   .side-foot{
-    border-top:1px solid var(--line); padding:9px 14px;
-    font-size:11.5px; color:var(--muted);
-    display:flex; align-items:center; gap:7px;
+    border-top:1px solid var(--line);padding:10px 16px;
+    font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:7px;
   }
   .dot{width:6px;height:6px;border-radius:50%;background:var(--ok);flex:none;}
   .dot.bad{background:#b4454f;}
 
-  /* --------------------------------------------------------------- main */
+  /* -------------------------------------------------------------- main  */
   .main{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;}
   .topbar{
-    height:46px; flex:none; border-bottom:1px solid var(--line);
-    display:flex; align-items:center; gap:10px; padding:0 16px;
+    height:50px;flex:none;display:flex;align-items:center;gap:10px;
+    padding:0 18px;border-bottom:1px solid transparent;
   }
-  .topbar h1{font-size:13.5px;font-weight:600;margin:0;letter-spacing:-.01em;}
-  .topbar .meta-model{font-size:11.5px;color:var(--muted);}
+  .topbar.scrolled{border-bottom-color:var(--line);}
+  .topbar h1{
+    font-size:14px;font-weight:550;margin:0;letter-spacing:-.01em;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
   .grow{flex:1;}
   .ghost{
-    width:28px;height:28px;display:grid;place-items:center;border-radius:var(--r);
-    border:1px solid transparent;background:transparent;color:var(--muted);
-    cursor:pointer;
+    width:30px;height:30px;display:grid;place-items:center;border-radius:7px;
+    border:0;background:transparent;color:var(--muted);cursor:pointer;
   }
-  .ghost:hover{background:var(--line-2);color:var(--ink);}
+  .ghost:hover{background:var(--active);color:var(--ink);}
   .ghost svg{width:15px;height:15px;}
   #burger{display:none;}
 
   .scroll{flex:1;overflow-y:auto;min-height:0;}
-  .thread{max-width:712px;margin:0 auto;padding:30px 24px 10px;}
+  .thread{max-width:740px;margin:0 auto;padding:22px 28px 12px;}
 
-  /* empty state — deliberately plain */
-  .intro{padding:46px 0 10px;}
-  .intro h2{
-    font-size:19px;font-weight:600;margin:0 0 6px;letter-spacing:-.02em;
-  }
-  .intro p{margin:0 0 26px;color:var(--muted);font-size:14px;max-width:56ch;}
-  .starters{border-top:1px solid var(--line-2);}
+  /* empty state */
+  .intro{padding:52px 0 10px;}
+  .intro h2{font-size:21px;font-weight:550;margin:0 0 8px;letter-spacing:-.02em;}
+  .intro p{margin:0 0 28px;color:var(--muted);font-size:14.5px;max-width:54ch;}
   .starter{
-    display:block;width:100%;text-align:left;border:0;background:transparent;
-    border-bottom:1px solid var(--line-2);padding:11px 2px;cursor:pointer;
-    font-size:14px;color:var(--ink-2);
+    display:block;width:100%;text-align:left;background:transparent;
+    border:0;border-top:1px solid var(--line-2);padding:12px 2px;cursor:pointer;
+    font-size:14.5px;color:var(--ink-2);
   }
-  .starter:hover{color:var(--accent);}
-  .starter b{font-weight:450;}
+  .starter:last-child{border-bottom:1px solid var(--line-2);}
+  .starter:hover{color:var(--ink);}
 
-  /* turns */
-  .turn{padding:16px 0;}
-  .who{
-    font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
-    color:var(--muted);margin-bottom:7px;
+  /* ------------------------------------------------------------- turns  */
+  .turn{display:flex;margin-bottom:28px;}
+  .turn.user{justify-content:flex-end;}
+  .bubble{min-width:0;}
+  .turn.user .bubble{
+    background:var(--bubble);border-radius:16px;padding:11px 16px;
+    max-width:80%;color:var(--ink);
   }
-  .text{white-space:pre-wrap;overflow-wrap:anywhere;font-size:15px;}
-  .turn.user .text{color:var(--ink-2);}
+  .turn.bot .bubble{max-width:100%;width:100%;}
+  .text{white-space:pre-wrap;overflow-wrap:anywhere;}
   .text.err{
     background:var(--err-bg);border:1px solid var(--err-line);color:var(--err);
-    border-radius:var(--r);padding:10px 12px;
+    border-radius:10px;padding:11px 13px;
   }
   .note{
     background:var(--warn-bg);border:1px solid var(--warn-line);color:var(--warn);
-    border-radius:var(--r);padding:8px 11px;font-size:12.5px;margin-top:9px;
+    border-radius:9px;padding:9px 12px;font-size:12.5px;margin-top:10px;
   }
   .caret{
     display:inline-block;width:7px;height:15px;margin-left:2px;vertical-align:-2px;
-    background:var(--ink-2);opacity:.75;animation:blink 1.05s steps(2,start) infinite;
+    background:var(--ink-2);opacity:.7;animation:blink 1.05s steps(2,start) infinite;
   }
   @keyframes blink{50%{opacity:0;}}
 
-  /* sources — human document names, never filenames */
-  .sources{
-    margin-top:13px;padding-top:10px;border-top:1px solid var(--line-2);
-    font-size:12.5px;color:var(--muted);
-  }
-  .sources b{font-weight:600;color:var(--ink-2);margin-right:6px;}
+  /* sources — document names, never filenames */
+  .sources{margin-top:15px;font-size:12.5px;color:var(--muted);}
+  .sources b{font-weight:600;color:var(--ink-2);margin-right:7px;}
   .src{color:var(--ink-2);}
   .src+.src::before{content:" · ";color:var(--muted);}
   .src.sup{color:var(--warn);}
-  .timing{margin-top:6px;font-size:11.5px;color:var(--muted);}
+  .timing{margin-top:5px;font-size:11.5px;color:var(--muted);}
 
   /* working indicator */
-  .working{display:flex;align-items:center;gap:10px;padding:2px 0;}
+  .working{display:flex;align-items:center;gap:10px;}
   .ring{
     width:13px;height:13px;flex:none;border-radius:50%;
     border:1.5px solid var(--line);border-top-color:var(--muted);
     animation:spin .65s linear infinite;
   }
   @keyframes spin{to{transform:rotate(360deg);}}
-  .working .label{font-size:13.5px;color:var(--ink-2);}
+  .working .label{font-size:14.5px;color:var(--muted);}
   .working .clock{font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums;}
-  .bar{height:2px;background:var(--line-2);border-radius:2px;margin-top:11px;overflow:hidden;}
-  .bar i{display:block;height:100%;background:var(--muted);width:25%;border-radius:2px;
-         animation:track 1.5s ease-in-out infinite;}
-  @keyframes track{0%{transform:translateX(-100%)}100%{transform:translateX(400%)}}
-  .resolved{margin-top:9px;font-size:12px;color:var(--muted);}
+  .resolved{margin-top:8px;font-size:12.5px;color:var(--muted);}
 
-  /* composer */
-  .composer-wrap{flex:none;padding:10px 24px 16px;background:var(--bg);}
+  /* ---------------------------------------------------------- composer  */
+  .composer-wrap{flex:none;padding:8px 28px 18px;}
   .composer{
-    max-width:712px;margin:0 auto;display:flex;align-items:flex-end;gap:8px;
-    border:1px solid var(--line);border-radius:8px;background:var(--bg);
-    padding:7px 7px 7px 13px;transition:border-color .12s;
+    max-width:740px;margin:0 auto;display:flex;align-items:flex-end;gap:8px;
+    border:1px solid var(--line);border-radius:14px;background:var(--raise);
+    padding:9px 9px 9px 16px;transition:border-color .12s;
   }
   .composer:focus-within{border-color:var(--muted);}
   textarea{
     flex:1;border:0;outline:0;resize:none;background:transparent;color:inherit;
-    font:inherit;line-height:1.55;padding:5px 0;max-height:176px;min-height:24px;
+    font:inherit;line-height:1.6;padding:6px 0;max-height:192px;min-height:26px;
   }
   textarea::placeholder{color:var(--muted);}
   .send{
-    width:30px;height:30px;flex:none;border:0;border-radius:var(--r);cursor:pointer;
+    width:31px;height:31px;flex:none;border:0;border-radius:8px;cursor:pointer;
     background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;
   }
-  .send:disabled{opacity:.3;cursor:not-allowed;}
-  .send.stop{background:var(--ink-2);}
+  .send:disabled{opacity:.25;cursor:not-allowed;}
   .send svg{width:14px;height:14px;}
-  .legal{
-    max-width:712px;margin:7px auto 0;font-size:11px;color:var(--muted);
-    text-align:center;
-  }
+  .legal{max-width:740px;margin:8px auto 0;font-size:11px;color:var(--muted);text-align:center;}
 
   @media (max-width:860px){
-    .sidebar{
-      position:fixed;inset:0 auto 0 0;z-index:40;transform:translateX(-100%);
-      transition:transform .18s ease;box-shadow:0 0 0 100vmax rgba(0,0,0,0);
-    }
+    .sidebar{position:fixed;inset:0 auto 0 0;z-index:40;transform:translateX(-100%);
+             transition:transform .18s ease;}
     .sidebar.open{transform:none;box-shadow:0 0 0 100vmax rgba(0,0,0,.35);}
     #burger{display:grid;}
     .thread,.composer,.legal{max-width:none;}
+    .thread{padding-left:18px;padding-right:18px;}
+    .composer-wrap{padding-left:18px;padding-right:18px;}
+    .turn.user .bubble{max-width:88%;}
   }
 </style>
 </head>
@@ -244,12 +233,11 @@
   </aside>
 
   <div class="main">
-    <div class="topbar">
+    <div class="topbar" id="topbar">
       <button class="ghost" id="burger" aria-label="Conversations">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
       </button>
       <h1 id="threadtitle">New conversation</h1>
-      <span class="meta-model" id="modelmeta"></span>
       <span class="grow"></span>
       <button class="ghost" id="theme" aria-label="Theme">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/></svg>
@@ -261,7 +249,7 @@
         <div class="intro" id="intro">
           <h2>Ask about Nodi Tech policy, NodiDesk, or the API</h2>
           <p>Answers come only from the company's internal documents, with sources listed. Everything runs locally on this machine.</p>
-          <div class="starters" id="starters"></div>
+          <div id="starters"></div>
         </div>
         <div id="log"></div>
       </div>
@@ -281,7 +269,7 @@
 'use strict';
 
 const $ = id => document.getElementById(id);
-const log = $('log'), intro = $('intro'), scroll = $('scroll');
+const log = $('log'), intro = $('intro'), scroll = $('scroll'), topbar = $('topbar');
 const form = $('form'), input = $('q'), sendBtn = $('send');
 const convosEl = $('convos'), threadTitle = $('threadtitle'), sidebar = $('sidebar');
 
@@ -305,18 +293,22 @@ const STAGE_TEXT = {
   writing:'Composing the answer',
 };
 
-const ICON_SEND = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+const ICON_SEND = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
 const ICON_STOP = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg>';
 const ICON_TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>';
 
 function el(t,c,x){ const n=document.createElement(t); if(c)n.className=c; if(x!==undefined)n.textContent=x; return n; }
-function atBottom(){ return scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 120; }
+function atBottom(){ return scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 130; }
 function down(force){ if(force||atBottom()) scroll.scrollTop = scroll.scrollHeight; }
 
-/* Filenames are an implementation detail. The model is told to cite with
-   [employee_handbook_v3.md]; that marker is stripped from what the reader
-   sees, and the same documents are listed by their real names underneath.
-   A half-streamed "[employee_hand" is hidden too, so nothing flickers. */
+scroll.addEventListener('scroll', () => {
+  topbar.classList.toggle('scrolled', scroll.scrollTop > 4);
+});
+
+/* Filenames are an implementation detail. The model cites with
+   [employee_handbook_v3.md]; the marker is removed from what the reader sees,
+   and the same documents are named underneath. A half-streamed
+   "[employee_hand" is hidden too, so nothing flickers. */
 function stripCitations(text){
   let t = text.replace(/\s*\[[^\[\]\n]*?\.(?:md|pdf)\]/gi, '');
   t = t.replace(/\s*\[[^\[\]\n]*$/, '');
@@ -325,18 +317,22 @@ function stripCitations(text){
   return t.replace(/\s+$/, '');
 }
 
-function addTurn(who, isUser){
+/* User turns sit right in a bubble; the assistant runs full width with no
+   bubble, so a long answer reads as a document rather than a speech balloon. */
+function addTurn(isUser){
   intro.style.display = 'none';
-  const turn = el('div','turn' + (isUser?' user':''));
-  turn.appendChild(el('div','who', isUser ? 'You' : 'Assistant'));
+  const turn = el('div','turn ' + (isUser ? 'user' : 'bot'));
+  const bubble = el('div','bubble');
+  bubble.appendChild(el('span','sr', isUser ? 'You said: ' : 'Assistant said: '));
   const text = el('div','text');
-  turn.appendChild(text);
+  bubble.appendChild(text);
+  turn.appendChild(bubble);
   log.appendChild(turn);
   down(true);
-  return {turn, text};
+  return {turn, bubble, text};
 }
 
-function renderSources(turn, citations){
+function renderSources(bubble, citations){
   if(!citations || !citations.length) return;
   const box = el('div','sources');
   box.appendChild(el('b', null, 'Sources'));
@@ -345,32 +341,32 @@ function renderSources(turn, citations){
     s.textContent = c.title + (c.status==='superseded' ? ' (superseded)' : '');
     box.appendChild(s);
   });
-  turn.appendChild(box);
+  bubble.appendChild(box);
 }
 
 /* ---------------------------------------------------------- working ---- */
-function makeWorking(turn){
+function makeWorking(bubble){
   const box = el('div','working-wrap');
   const row = el('div','working');
   row.appendChild(el('div','ring'));
   const label = el('div','label','Starting');
-  const clock = el('div','clock','0s');
+  const clock = el('div','clock','');
   row.appendChild(label); row.appendChild(el('span','grow')); row.appendChild(clock);
   box.appendChild(row);
-  const bar = el('div','bar'); bar.appendChild(el('i')); box.appendChild(bar);
   const resolved = el('div','resolved'); resolved.style.display='none';
   box.appendChild(resolved);
-  turn.appendChild(box);
+  bubble.appendChild(box);
 
   const t0 = performance.now();
   const timer = setInterval(() => {
-    clock.textContent = Math.round((performance.now()-t0)/1000) + 's';
+    const s = Math.round((performance.now()-t0)/1000);
+    clock.textContent = s >= 3 ? s + 's' : '';
   }, 250);
 
   return {
     box, timer,
     stage(key){ if(STAGE_TEXT[key]) label.textContent = STAGE_TEXT[key]; },
-    say(text){ label.textContent = text; },
+    say(t){ label.textContent = t; },
     resolvedTo(q){ resolved.style.display=''; resolved.textContent = 'Interpreted as: ' + q; },
     stop(){ clearInterval(timer); box.remove(); },
   };
@@ -400,13 +396,13 @@ async function ask(question){
   if(busy || !question) return;
   busy = true; setSending(true);
 
-  addTurn('You', true).text.textContent = question;
+  addTurn(true).text.textContent = question;
   if(threadTitle.textContent === 'New conversation'){
-    threadTitle.textContent = question.length > 60 ? question.slice(0,59)+'…' : question;
+    threadTitle.textContent = question.length > 64 ? question.slice(0,63)+'…' : question;
   }
 
-  const {turn, text} = addTurn('Assistant', false);
-  const work = makeWorking(turn);
+  const {bubble, text} = addTurn(false);
+  const work = makeWorking(bubble);
 
   let answer='', gotDone=false, aborted=false;
   controller = new AbortController();
@@ -443,7 +439,7 @@ async function ask(question){
           const s = payload.stage;
           if(s === 'reading') work.say('Reviewing ' + payload.sources + ' sources');
           else if(s === 'rewritten') work.resolvedTo(payload.query);
-          else if(s === 'degraded' || s === 'truncated') turn.appendChild(el('div','note', payload.message));
+          else if(s === 'degraded' || s === 'truncated') bubble.appendChild(el('div','note', payload.message));
           else work.stage(s);
         } else if(event === 'error'){
           gotDone = true; work.stop();
@@ -452,10 +448,10 @@ async function ask(question){
         } else if(event === 'done'){
           gotDone = true; work.stop();
           text.textContent = stripCitations(answer);
-          renderSources(turn, payload.citations);
+          renderSources(bubble, payload.citations);
           const t = payload.timings || {};
-          if(t.total_s !== undefined){
-            turn.appendChild(el('div','timing', 'Answered in ' + Math.round(t.total_s) + ' seconds'));
+          if(t.total_s !== undefined && t.total_s >= 3){
+            bubble.appendChild(el('div','timing','Answered in ' + Math.round(t.total_s) + ' seconds'));
           }
           down();
         }
@@ -466,7 +462,7 @@ async function ask(question){
     if(err && err.name === 'AbortError'){
       aborted = true; gotDone = true;
       text.textContent = stripCitations(answer);
-      turn.appendChild(el('div','note','Stopped.'));
+      bubble.appendChild(el('div','note','Stopped.'));
     }else{
       text.className = 'text err';
       text.textContent = 'Could not reach the server: ' + (err && err.message ? err.message : err);
@@ -482,7 +478,7 @@ async function ask(question){
      failure mode for a citation-backed assistant. */
   if(!gotDone && !aborted){
     text.textContent = stripCitations(answer);
-    turn.appendChild(el('div','note',
+    bubble.appendChild(el('div','note',
       'The connection ended before the answer finished, so this reply may be incomplete.'));
   }
 
@@ -492,7 +488,6 @@ async function ask(question){
 }
 
 function setSending(on){
-  sendBtn.classList.toggle('stop', on);
   sendBtn.innerHTML = on ? ICON_STOP : ICON_SEND;
   sendBtn.title = on ? 'Stop' : 'Send';
   sendBtn.disabled = !on && !input.value.trim();
@@ -501,8 +496,7 @@ function setSending(on){
 /* ------------------------------------------------------- conversations -- */
 function dayLabel(ts){
   const d = new Date(ts*1000), now = new Date();
-  const same = d.toDateString() === now.toDateString();
-  if(same) return 'Today';
+  if(d.toDateString() === now.toDateString()) return 'Today';
   const y = new Date(now); y.setDate(now.getDate()-1);
   if(d.toDateString() === y.toDateString()) return 'Yesterday';
   if((now - d)/86400000 < 7) return 'Previous 7 days';
@@ -531,8 +525,7 @@ async function refreshConversations(){
     row.appendChild(el('span', null, c.title));
 
     const del = el('button','del');
-    del.type = 'button';
-    del.title = 'Delete';
+    del.type = 'button'; del.title = 'Delete';
     del.innerHTML = ICON_TRASH;
     del.addEventListener('click', async ev => {
       ev.stopPropagation();
@@ -541,7 +534,6 @@ async function refreshConversations(){
       refreshConversations();
     });
     row.appendChild(del);
-
     row.addEventListener('click', () => openConversation(c.conversation_id, c.title));
     convosEl.appendChild(row);
   });
@@ -563,9 +555,9 @@ async function openConversation(id, title){
 
   (data.turns || []).forEach(t => {
     const isUser = t.role === 'user';
-    const {turn, text} = addTurn(isUser ? 'You' : 'Assistant', isUser);
+    const {bubble, text} = addTurn(isUser);
     text.textContent = isUser ? t.content : stripCitations(t.content);
-    if(!isUser) renderSources(turn, t.citations);
+    if(!isUser) renderSources(bubble, t.citations);
   });
 
   sidebar.classList.remove('open');
@@ -597,7 +589,7 @@ input.addEventListener('keydown', e => {
 });
 input.addEventListener('input', () => {
   input.style.height = 'auto';
-  input.style.height = Math.min(input.scrollHeight, 176) + 'px';
+  input.style.height = Math.min(input.scrollHeight, 192) + 'px';
   if(!busy) sendBtn.disabled = !input.value.trim();
 });
 
@@ -616,17 +608,15 @@ try{
 }catch{}
 
 const starters = $('starters');
-STARTERS.forEach(text => {
-  const b = el('button','starter'); b.type='button';
-  b.appendChild(el('b',null,text));
-  b.addEventListener('click', () => ask(text));
+STARTERS.forEach(t => {
+  const b = el('button','starter', t); b.type='button';
+  b.addEventListener('click', () => ask(t));
   starters.appendChild(b);
 });
 
 fetch('/health').then(r => r.json()).then(h => {
   $('footstat').textContent = h.ok ? h.index.chunks + ' documents indexed' : 'degraded';
   if(!h.ok) $('dot').classList.add('bad');
-  $('modelmeta').textContent = 'local · ' + h.models.llm.split(':')[0];
 }).catch(() => {
   $('dot').classList.add('bad');
   $('footstat').textContent = 'server unreachable';
