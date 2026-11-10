@@ -12,21 +12,117 @@ documents of a fictional company, Nodi Tech Ltd. No cloud LLM, no API keys.
 
 ---
 
-## 1. Start here on a new machine
+## 1. Setting this up on a new machine
 
-Full setup is in [`README.md`](README.md) → **Setup from a fresh clone**.
-The short version, because nothing works until these are done:
+A clone has **no virtual environment, no indexes and no `.env`** — all four
+are generated and gitignored. Run every step below. Budget ~20 minutes, almost
+all of it downloading ~6.5 GB of models.
+
+Needs **Python 3.10 or 3.11** (not 3.12+ — the `onnxruntime` wheels do not
+exist), ~10 GB of disk and 16 GB of RAM.
+
+### Step 1 — get the code
 
 ```bash
-ollama serve                     # must be running, with 3 model slots
-python -m src.ingest             # parse corpus      -> storage/chunks.json
-python -m src.index              # BM25 + vectors    -> storage/{bm25.pkl,qdrant}
+git clone <repo-url> ai-chatbot
+cd ai-chatbot
+```
+
+### Step 2 — Ollama, with three model slots
+
+```powershell
+winget install Ollama.Ollama          # macOS: brew install ollama
+
+setx OLLAMA_MAX_LOADED_MODELS 3
+setx OLLAMA_NUM_PARALLEL 1
+setx OLLAMA_KEEP_ALIVE 30m
+```
+
+These are read when the server launches, so open a **new terminal** and leave
+this running:
+
+```bash
+ollama serve
+```
+
+Three slots, not two: the generator, the embedder and the rewriter must all
+stay resident. With two, measured, every conversational turn evicted and
+reloaded a model twice — 20-40 s of pure waste per answer.
+
+### Step 3 — pull the models (~5.4 GB)
+
+```bash
+ollama pull qwen3:4b-instruct-2507-q4_K_M    # 2.5 GB  writes the answers
+ollama pull bge-m3                           # 1.2 GB  multilingual embeddings
+ollama pull qwen3:1.7b-q4_K_M                # 1.4 GB  rewrites follow-ups
+ollama pull nomic-embed-text                 # 274 MB  optional, comparison only
+ollama list                                  # confirm all four
+```
+
+All are **already quantised** (`q4_K_M` = 4-bit). Nothing is quantised here.
+
+### Step 4 — Python environment
+
+```bash
+python -m venv .venv
+# if the default python is not 3.10/3.11, use a full path, e.g.
+#   "C:\laragon\bin\python\python-3.10\python.exe" -m venv .venv
+
+.venv\Scripts\activate          # Windows
+source .venv/bin/activate        # macOS / Linux
+
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+
+copy .env.example .env           # cp on macOS / Linux
+```
+
+### Step 5 — build the indexes (~45 s)
+
+```bash
+python -m src.ingest     # -> storage/chunks.json   "12 documents -> 50 chunks"
+python -m src.index      # -> storage/bm25.pkl + storage/qdrant
+```
+
+Both fail loudly and exit non-zero if a corpus invariant breaks, naming which.
+
+### Step 6 — run it
+
+```bash
 python -m uvicorn src.api.app:app --port 8000
 ```
 
-`storage/`, `.venv/`, `.env` and `eval/results/` are **gitignored**. A fresh
-clone has no indexes, so steps 2 and 3 are mandatory, not optional. The server
-refuses to start without them and prints the exact command to fix it.
+Open <http://127.0.0.1:8000>. Eight preflight checks must print `[OK]`; the
+server refuses to start otherwise and prints the exact fix.
+
+The **first thing that uses the reranker downloads it** — ~1.1 GB into
+`storage/models/`. That is whichever comes first: a question, `pytest`, or an
+eval script.
+
+### Step 7 — verify
+
+```bash
+pytest                                 # 220 tests; ~3-4 min first run, ~75 s after
+curl http://127.0.0.1:8000/health      # "ok": true
+```
+
+### Do not copy between machines
+
+`.venv/` holds absolute paths and `storage/` is regenerated in a minute. Copy
+neither. Everything needed is tracked in git.
+
+### When it goes wrong
+
+| Message | Fix |
+|---|---|
+| `Preflight failed` | Each failing line prints its own fix |
+| `cannot reach Ollama` | `ollama serve` is not running |
+| `model ... missing` | Run the `ollama pull` it names |
+| `chunks.json / bm25.pkl missing` | Step 5 |
+| `AlreadyLocked` | Something else holds the index — stop the server |
+| `UnicodeEncodeError: 'charmap'` | Prefix with `PYTHONIOENCODING=utf-8` |
+| `No matching distribution for onnxruntime` | Python 3.12+. Rebuild the venv on 3.10/3.11 |
+| Every answer says "cut off" | Stale cached page. Hard-reload with Ctrl+Shift+R |
 
 ---
 
