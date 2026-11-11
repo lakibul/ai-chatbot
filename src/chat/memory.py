@@ -46,15 +46,20 @@ class Conversation:
     updated_at: float = field(default_factory=time.time)
     seq: int = field(default_factory=lambda: next(_SEQ))
 
-    def add_user(self, text: str) -> None:
-        self.turns.append({"role": "user", "content": text})
+    def add_user(self, text: str, ts: float | None = None) -> None:
+        # `ts` is when the question was ASKED. The turn is only appended once
+        # the answer is complete, so defaulting to now() would stamp a
+        # 60-second answer as if the user had typed it when it finished.
+        self.turns.append({"role": "user", "content": text,
+                           "ts": float(ts) if ts is not None else time.time()})
         if not self.title:
             self.title = _make_title(text)
         self.updated_at = time.time()
         self.seq = next(_SEQ)
 
     def add_assistant(self, text: str, citations: list[dict] | None = None) -> None:
-        turn: dict[str, Any] = {"role": "assistant", "content": text}
+        turn: dict[str, Any] = {"role": "assistant", "content": text,
+                                "ts": time.time()}
         if citations:
             # Kept beside the message, never inside `content`: this is for the
             # reader, so that a reopened conversation still shows its sources,
@@ -63,6 +68,21 @@ class Conversation:
         self.turns.append(turn)
         self.updated_at = time.time()
         self.seq = next(_SEQ)
+
+    def attach_trace(self, steps: list[dict] | None,
+                     timings: dict[str, Any] | None) -> None:
+        """Record how the last answer was produced, for the UI only.
+
+        Stored beside the message exactly like `citations`, and projected
+        away by window() for the same reason: it is a record for the reader,
+        and must never be fed back to the model as if it were conversation.
+        """
+        if not self.turns or self.turns[-1].get("role") != "assistant":
+            return
+        if steps:
+            self.turns[-1]["steps"] = steps
+        if timings:
+            self.turns[-1]["timings"] = timings
 
     def window(self, turns: int | None = None) -> list[dict[str, str]]:
         """The last N messages, oldest first.

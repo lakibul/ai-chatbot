@@ -21,6 +21,7 @@ banner -- never silently.
 """
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -136,8 +137,18 @@ class Retriever:
         top_k = top_k or config.FINAL_TOP_K
         result = RetrievalResult(hits=[])
 
+        # Per-stage wall clock, recorded only so the UI can show WHICH part
+        # of a slow search was slow. Nothing here changes what is returned --
+        # the hits, their order and their scores are identical with the
+        # timers removed.
+        mark = time.perf_counter()
         lexical_hits = self._lexical(query, result)
+        result.stages["bm25_ms"] = round((time.perf_counter() - mark) * 1000, 1)
+
+        mark = time.perf_counter()
         vector_hits = self._vector(query, result)
+        result.stages["vector_ms"] = round((time.perf_counter() - mark) * 1000, 1)
+
         result.stages["bm25_count"] = len(lexical_hits)
         result.stages["vector_count"] = len(vector_hits)
 
@@ -147,9 +158,16 @@ class Retriever:
             result.stages["reason"] = "no candidates"
             return result
 
+        mark = time.perf_counter()
         fused = reciprocal_rank_fusion([lexical_hits, vector_hits])
         boosted = apply_code_boost(query, fused)
         candidates = self._select_candidates(boosted, lexical_hits, vector_hits)
+        result.stages["fuse_ms"] = round((time.perf_counter() - mark) * 1000, 1)
+        result.stages["fused_count"] = len(fused)
+        # How many chunks carried a literal identifier match. Shown in the
+        # inspector because this boost is the step that rescues ND-1042.
+        result.stages["code_boosted"] = sum(
+            1 for hit in boosted if hit.debug.get("code_boost"))
         result.stages["candidates"] = len(candidates)
 
         if not self.use_reranker:
@@ -158,8 +176,10 @@ class Retriever:
             return result
 
         try:
+            mark = time.perf_counter()
             result.hits = rerank(query, candidates, top_k=top_k,
                                  model=self.reranker_model)
+            result.stages["rerank_ms"] = round((time.perf_counter() - mark) * 1000, 1)
             result.stages["ranking"] = "rerank"
         except RerankerUnavailable as exc:
             result.degraded.append(f"reranker unavailable, using fusion order ({exc})")

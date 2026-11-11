@@ -151,7 +151,7 @@ class ChatEngine:
         if canned is not None:
             yield "token", {"text": canned}
             if conversation is not None:
-                conversation.add_user(question)
+                conversation.add_user(question, ts=started)
                 conversation.add_assistant(canned)
             timings.total = time.time() - started
             yield "done", {"citations": [], "timings": timings.as_dict(),
@@ -195,8 +195,18 @@ class ChatEngine:
             "stage": "searched",
             "lexical": result.stages.get("bm25_count", 0),
             "vector": result.stages.get("vector_count", 0),
+            "fused": result.stages.get("fused_count", 0),
+            "boosted": result.stages.get("code_boosted", 0),
             "candidates": result.stages.get("candidates", 0),
             "ranking": result.stages.get("ranking", ""),
+            # Per-sub-step milliseconds, so the inspector can show which part
+            # of the search cost the time instead of one opaque total.
+            "ms": {
+                "bm25": result.stages.get("bm25_ms"),
+                "vector": result.stages.get("vector_ms"),
+                "fuse": result.stages.get("fuse_ms"),
+                "rerank": result.stages.get("rerank_ms"),
+            },
         }
 
         for note in result.degraded:
@@ -289,7 +299,7 @@ class ChatEngine:
 
         citations = used_citations(answer, citations_from(result.hits))
         if conversation is not None:
-            conversation.add_user(question)
+            conversation.add_user(question, ts=started)
             conversation.add_assistant(answer, citations)
 
         yield "done", {"citations": citations,

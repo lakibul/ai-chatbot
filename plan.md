@@ -613,3 +613,133 @@ Mean latency 38.4 s, max 80.7 s, 25.6 min for the full set.
 The genuine failures the audit found were Q28 and Q33 (both one-of-two-values omissions) and **Q37, the dangerous one** — the bot said "no mention of WhatsApp" and then appended *"Therefore, based on the documents, NodiDesk does not integrate with WhatsApp."* That is the absence-as-denial inference plan 4.6 forbids, and it survived a rule that described the principle. It took a rule that bans the concluding sentence verbatim. Q37 now passes.
 
 The Q37 *checker* was also wrong: its refusal markers lacked "no mention of", so it failed a correct answer for the wrong reason. An assertion list is itself code that can be buggy.
+
+---
+
+## 12. Second machine — portability log, 2026-11-11
+
+§11 is the original build on the Ryzen 5 3400G. This section records moving the
+finished project to a second, faster machine. **§11 remains the reference for
+the CTO demo**; nothing in the stack was changed to produce the numbers below.
+Same model tags, same `requirements.txt` pins, same `src/config.py` defaults.
+
+### 12.1 The two machines
+
+| | Original (§1) | This machine |
+|---|---|---|
+| CPU | Ryzen 5 3400G · 4c/8t · Zen+ · AVX2, **no AVX-512** | **i7-11700 · 8c/16t · Rocket Lake · AVX-512 + VBMI + VNNI** |
+| RAM | 16 GB DDR4-2666 | **32 GB** |
+| GPU | GT 1030, 2 GB — unusable | **Radeon RX 6600, 8 GB** — usable, but **deliberately unused** |
+| Repo | `C:\ai-chatbot\` | **`D:\AI\ai-chatbot\`** |
+| Ollama | 0.40.16 | **0.40.16** (pinned deliberately — see 12.3) |
+
+`src/config.py` derives `ROOT` from `__file__`, so the drive change needed no
+code edit. Only documentation mentioned the old path.
+
+### 12.2 Measured — same code, different silicon
+
+| Stage | §11.2 measured | This machine | Change |
+|---|---|---|---|
+| Prefill, 4B, cold (1,317 tok) | 48.6 s @ 23.9 tok/s | **5.2 s @ 250.9 tok/s** | **10.5x faster** |
+| Generation, 4B | 5.8 tok/s | **12.7 tok/s** | 2.2x |
+| Wall per answer (bench) | 60-90 s | **9.1 s** | ~8x |
+| Rerank, per candidate | 0.43 s | **0.074 s** | 5.8x |
+| Index build (50 chunks) | ~45 s | **11.5 s** | 3.9x |
+| `pytest` (220) | ~75 s | **27 s** | 2.8x |
+| `pytest -m slow` (5) | ~4 min | **36 s** | 6.7x |
+| `eval_retrieval` | 6-9 min | **~1 min** | ~7x |
+| `eval_answers` (40 q) | ~30 min, mean 38.4 s | **8.3 min, mean 9.5 s** | 3.6x |
+| `eval_conversations` | ~8 min | **1.7 min** | 4.7x |
+
+**The speedup is mostly AVX-512, not core count.** Ollama's log reports
+`AVX512 = 1 | AVX512_VBMI = 1 | AVX512_VNNI = 1`; §1 recorded the Zen+ box as
+AVX2-only. VNNI accelerates exactly the quantised integer matrix multiply that
+dominates prefill, which is why prefill gained 10.5x while generation — still
+memory-bandwidth-bound, as §5 argued — gained only 2.2x. **§5's model of the
+bottleneck was correct; only the constant changed.**
+
+**`NUM_THREAD=8` is still right, for a new reason.** §11.2 chose 8 because SMT
+*helped* Zen+. Here 16 threads is measurably *worse* (163.7 vs 250.9 tok/s
+prefill), so 8 wins again — but because it matches the 8 physical cores, not
+because SMT helps. Same value, opposite reasoning. **Unchanged.**
+
+**The GPU stays off.** The RX 6600's 8 GB would hold the 4B model, so for the
+first time `num_gpu: 0` is a choice rather than a necessity. It is kept at 0 for
+parity with §11. Enabling it is a one-line `.env` change and would invalidate
+every number above until re-measured.
+
+### 12.3 Results — reproduced
+
+| Metric | §11.5 | This machine |
+|---|---|---|
+| Retrieval hit rate @5 | 36/36 | **36/36** |
+| Rank-1 | 35/36 | **35/36** (same Q38-at-rank-2) |
+| Answer correctness | 39/40 | **39/40** (audited — see below) |
+| Technical errors | 0 | **0** |
+| Conversation turns | 9/9 | **8/9** (see 12.4) |
+| `pytest` | 220 | **220 + 5 slow = 225** |
+
+**The judge scored 40/40; the audit says 39/40.** Q33 was graded CORRECT, but
+the judge's own stated reason ends "...though it omits the price for guests",
+and the answer text contains no `২০০`. The bot behaved **identically** to §11.5
+— it still gives only the employee price. This is a judge flip in the
+*optimistic* direction, the mirror image of the pessimistic flip §11.5 caught on
+Q15/Q19, and it is the second time plan R7 has paid for itself. **The honest,
+reportable figure is 39/40, matching the original machine exactly.**
+
+### 12.4 The one genuine behavioural difference
+
+C1 turn 3, "And what about sick leave?", fails here and passed on the original
+machine. It is **reproducible, not flaky** — identical across four runs.
+
+Mechanism, confirmed rather than guessed: `rewrite_query` returns the question
+**unchanged**, and a direct call to the rewrite model shows it echoing the input
+verbatim with no exception raised. So this is not the silent-fallback failure of
+§11.4 item 5 — `think:false` works, the model answers, and it simply judges the
+question already standalone. Without the rewrite, "carry forward" never enters
+the query, so the answer omits that sick leave cannot be carried forward.
+
+The cause is almost certainly 12.2's AVX-512 kernels: different SIMD paths give
+slightly different floating-point results, and at `temperature 0.1` a borderline
+decision flips deterministically. **Not fixed.** Tuning the rewrite prompt to
+recover one assertion would be tuning to the test, exactly as §11.5 declined to
+patch Q33.
+
+### 12.5 Setup notes that cost time here
+
+1. **`winget install Ollama.Ollama` stalled at 0 bytes** — it wanted a
+   two-letter geographic region and never downloaded. Downloading the release
+   asset directly is the reliable path.
+2. **`OllamaSetup.exe` is Inno Setup, not NSIS.** `/S` is not a valid flag: it
+   silently opens the GUI wizard and waits forever. Use
+   `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART`.
+3. **The installer launches the Ollama tray app, which never exits**, so
+   `Start-Process -Wait` blocks forever even after a successful install. Check
+   for `ollama.exe` on disk rather than waiting on the exit code.
+4. **GitHub's release-asset host throttled one connection to ~113 KB/s** while
+   the link itself did 3.9 MB/s. Eight parallel HTTP Range requests gave ~20x.
+5. **A server started by the installer inherits the installer's environment**,
+   which may predate `setx`. Stop it and run `ollama serve` yourself, then
+   confirm `OLLAMA_MAX_LOADED_MODELS:3` in the server's own startup config line
+   instead of trusting that the variable was picked up.
+6. **`.venv` survived the copy only by luck** — `pyvenv.cfg` pins
+   `home = C:\laragon\bin\python\python-3.10`, which happened to exist on this
+   machine too. CLAUDE.md's "do not copy between machines" still stands.
+7. **Nothing was quantised, and on these tags nothing can be.** `q4_K_M` *is*
+   4-bit and Ollama ships the two language models pre-quantised. The two
+   embedders are *not* quantised -- `ollama show` reports `F16` for both
+   `bge-m3` and `nomic-embed-text` -- but Ollama refuses to quantise an
+   existing GGUF: *"create-time quantization is only supported for safetensors
+   imports; quantize GGUF models before importing"*. That rules out the
+   `ollama create -q` route, but **not** quantisation itself: Ollama ships
+   llama.cpp's `llama-quantize.exe` in `lib/ollama`, which quantises a GGUF
+   directly. The two F16 embedders could be quantised cleanly with it today.
+
+   It was still not done, and the reason is consequence rather than
+   feasibility. Requantising a generator needs `--allow-requantize`, whose own
+   help warns it "can severely reduce quality", and produces a different model
+   artefact -- every measured number in §11 and §12 would stop applying.
+   Quantising `bge-m3` rewrites every vector in `storage/qdrant`, so the index
+   must be rebuilt and `eval_retrieval` re-run before 36/36 can be quoted.
+   And the upside is absent: a warm query embed is **29 ms** of a ~9 s answer
+   (0.3%). The bottleneck is prefill, which AVX-512 already addressed.

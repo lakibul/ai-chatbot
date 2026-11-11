@@ -150,6 +150,7 @@ async def ask(payload: AskRequest, request: Request) -> EventSourceResponse:
         conversation = state["store"].get(payload.conversation_id)
         outcome = "incomplete"
         timings: dict[str, Any] = {}
+        stages: list[dict[str, Any]] = []
         saw_done = False
 
         generator = engine.ask(question, conversation)
@@ -168,6 +169,12 @@ async def ask(payload: AskRequest, request: Request) -> EventSourceResponse:
                     yield error_frame(data.get("code", "unexpected"),
                                       data.get("message", ""))
                     continue
+                if kind == "stage":
+                    # Kept so a reopened conversation can show HOW an old
+                    # answer was produced, not just what it said. Collected
+                    # here rather than inside the engine so the eight yield
+                    # sites stay untouched.
+                    stages.append(data)
                 if kind == "done":
                     saw_done = True
                     outcome = "ok"
@@ -191,6 +198,7 @@ async def ask(payload: AskRequest, request: Request) -> EventSourceResponse:
                 # Persist once per completed answer, so the sidebar and the
                 # model's own memory of a conversation survive a restart
                 # together.
+                conversation.attach_trace(stages, timings)
                 state["store"].save()
             _slot.release()
             log_request(request_id, question, outcome, timings,

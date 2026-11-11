@@ -10,6 +10,10 @@ documents of a fictional company, Nodi Tech Ltd. No cloud LLM, no API keys.
 **Status:** complete and evaluated. 39/40 answer correctness, 36/36 retrieval,
 220 tests passing. See `eval/results/REPORT.md`.
 
+**Reproduced on a second machine 2026-11-11** — same code, same model tags,
+same config: 39/40, 36/36, 225/225 tests, ~8× faster. `plan.md` §12 is the
+portability log; §5 below now carries both machines' numbers side by side.
+
 ---
 
 ## 1. Setting this up on a new machine
@@ -38,6 +42,22 @@ setx OLLAMA_NUM_PARALLEL 1
 setx OLLAMA_KEEP_ALIVE 30m
 ```
 
+**If winget hangs at 0 bytes** (it may demand a two-letter geographic region),
+download the installer directly and run it with **Inno Setup** flags — it is
+not NSIS, so `/S` is not silent, it opens a GUI wizard and waits forever:
+
+```powershell
+# https://github.com/ollama/ollama/releases/download/v0.40.16/OllamaSetup.exe
+.\OllamaSetup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+```
+
+The installer then launches the Ollama tray app, **which never exits** — so
+`Start-Process -Wait` blocks even after a successful install. Check for
+`%LOCALAPPDATA%\Programs\Ollama\ollama.exe` on disk instead of waiting on the
+exit code. GitHub's asset host may also throttle a single connection hard
+(113 KB/s measured while the link did 3.9 MB/s); parallel HTTP Range requests
+fix that.
+
 These are read when the server launches, so open a **new terminal** and leave
 this running:
 
@@ -49,6 +69,12 @@ Three slots, not two: the generator, the embedder and the rewriter must all
 stay resident. With two, measured, every conversational turn evicted and
 reloaded a model twice — 20-40 s of pure waste per answer.
 
+**Verify it, do not assume it.** A server started *by the installer* inherits
+the installer's environment, which can predate your `setx`. Kill it, run
+`ollama serve` yourself, and confirm the server's own startup line says
+`OLLAMA_MAX_LOADED_MODELS:3` — it prints its whole config as `msg="server
+config"`. A silently-2-slot server looks fine and just runs slowly.
+
 ### Step 3 — pull the models (~5.4 GB)
 
 ```bash
@@ -59,7 +85,40 @@ ollama pull nomic-embed-text                 # 274 MB  optional, comparison only
 ollama list                                  # confirm all four
 ```
 
-All are **already quantised** (`q4_K_M` = 4-bit). Nothing is quantised here.
+The two **language** models are already quantised -- `q4_K_M` *is* 4-bit. The two
+**embedders** are not: `ollama show bge-m3` and `nomic-embed-text` both report
+`F16`. Nothing is quantised here, and on these tags nothing can be:
+
+```
+$ ollama create probe -q q4_0 -f Modelfile      # FROM qwen3:4b-...-q4_K_M
+Error: create-time quantization is only supported for safetensors imports;
+       quantize GGUF models before importing
+```
+
+Ollama's own `create -q` is therefore a dead end. It is **not** the only route,
+though: Ollama bundles llama.cpp's quantiser at
+`%LOCALAPPDATA%\Programs\Ollama\lib\ollama\llama-quantize.exe`, which can
+quantise a GGUF directly, with no download.
+
+So the honest position is *could, but should not*:
+
+| Model | Source precision | Quantisable with the bundled tool? |
+|---|---|---|
+| `qwen3:4b-instruct-...-q4_K_M` | already Q4_K_M | only with `--allow-requantize`, whose own help says it "can severely reduce quality" |
+| `qwen3:1.7b-q4_K_M` | already Q4_K_M | same |
+| `bge-m3` | **F16** | yes, cleanly |
+| `nomic-embed-text` | **F16** | yes, cleanly |
+
+The reason not to is not feasibility, it is consequence. A requantised
+generator is a different model artefact, so every number in §5 and §11 stops
+applying. A quantised `bge-m3` rewrites **every vector** in `storage/qdrant`,
+so the index must be rebuilt and `eval_retrieval` re-run before the 36/36 can
+be quoted again. And the upside is not there: a warm query embed is **29 ms**
+of a ~9 s answer (0.3%). The time is in prefill, which AVX-512 already fixed.
+
+Measure first. If a future machine makes embedding the bottleneck, quantise
+`bge-m3` to `q8_0`, rebuild the index, and re-run the retrieval eval -- in that
+order.
 
 ### Step 4 — Python environment
 
@@ -110,6 +169,13 @@ curl http://127.0.0.1:8000/health      # "ok": true
 
 `.venv/` holds absolute paths and `storage/` is regenerated in a minute. Copy
 neither. Everything needed is tracked in git.
+
+This still stands even though a wholesale copy to machine B happened to work:
+`pyvenv.cfg` pins `home = C:\laragon\bin\python\python-3.10`, and that exact
+path existed on both boxes. That is luck, not portability. The copy also
+dragged stale `__pycache__` across, so tracebacks printed the *old* machine's
+paths (`C:\ai-chatbot\...`) and sent debugging to a directory that does not
+exist here. Delete `__pycache__` and `.pytest_cache` after any such copy.
 
 ### When it goes wrong
 
@@ -208,21 +274,40 @@ read-only — never edit it.** `rag_chatbot_kit.zip` is the pristine copy.
 
 ## 5. Measured facts — do not re-derive these
 
-Hardware: Ryzen 5 3400G (4c/8t, Zen+), 16 GB DDR4-2666, GT 1030 2 GB
-(**unusable** — a 4B Q4 needs ~2.5 GB, so `num_gpu: 0` is forced; `nvidia-smi`
-confirms Ollama never appears as a GPU process).
+**Two machines are recorded here.** Machine A is where the project was built
+and where the numbers quoted in `README.md` and `eval/results/REPORT.md` come
+from. Machine B is a faster box the project was moved to on 2026-11-11. The
+code, the model tags and `src/config.py` are **identical** on both —
+`plan.md` §12 is the full portability log.
 
-| | Measured |
-|---|---|
-| Prefill, 4B, cold | **23.9 tok/s** (1,162 tok → 48.6 s) |
-| Generation, 4B | **5.8 tok/s** |
-| Prefill, 1.7b, cold | 56.3 tok/s · generation 10.3 tok/s |
-| Bare question, no documents | prefill **0.8 s** |
-| Repeat question (prefix cached) | prefill **0.2 s**, total ~9 s |
-| Rerank 20 candidates | 8.6 s → **cut to 12 candidates** (~5 s) |
-| BM25 / vector+embed | ~0 ms / 205 ms |
-| `num_thread` 4 vs 8 | **8 wins**: 48.6 s vs 60.5 s prefill. SMT helps here |
-| Index build | ~45 s (50 chunks) |
+- **A** — Ryzen 5 3400G (4c/8t, Zen+, AVX2, **no AVX-512**), 16 GB DDR4-2666,
+  GT 1030 2 GB (**unusable**: a 4B Q4 needs ~2.5 GB).
+- **B** — i7-11700 (8c/16t, Rocket Lake, **AVX-512 + VBMI + VNNI**), 32 GB,
+  RX 6600 8 GB (**usable but deliberately unused**).
+
+On both, `num_gpu: 0` is forced and Ollama never appears as a GPU process.
+On B that is now a *choice* for demo parity, not a hardware limit.
+
+| | A (built on) | B (2026-11-11) |
+|---|---|---|
+| Prefill, 4B, cold | **23.9 tok/s** (1,162 tok → 48.6 s) | **250.9 tok/s** (1,317 tok → 5.2 s) |
+| Generation, 4B | **5.8 tok/s** | **12.7 tok/s** |
+| Prefill, 1.7b, cold | 56.3 tok/s · generation 10.3 tok/s | — |
+| Bare question, no documents | prefill **0.8 s** | — |
+| Repeat question (prefix cached) | prefill **0.2 s**, total ~9 s | — |
+| Rerank, per candidate | 0.43 s (20 → 8.6 s) | **0.074 s** (12 → 0.89 s) |
+| BM25 / vector+embed | ~0 ms / 205 ms | ~0 ms / ~0.23 s per chunk |
+| Best `num_thread` | **8** (48.6 s vs 60.5 s at 4) — SMT *helps* Zen+ | **8** (5.2 s vs 8.0 s at 16) — SMT *hurts*; 8 = physical cores |
+| Index build | ~45 s (50 chunks) | **11.5 s** |
+
+**`NUM_THREAD=8` is correct on both machines for opposite reasons.** Do not
+"simplify" that comment in `config.py` — measure before changing it.
+
+**Most of B's gain is AVX-512, not cores.** Ollama logs
+`AVX512_VNNI = 1` on B; VNNI accelerates the quantised integer matmul that
+dominates prefill, which is why prefill gained 10.5× while generation — still
+bandwidth-bound — gained only 2.2×. The §5 model of the bottleneck held; only
+the constant moved.
 
 **Latency is RAG, not the model.** A bare question prefills in 0.8 s; five
 retrieved documents add 15-25 s of reading before the first token. A 2.4×
@@ -235,13 +320,13 @@ for. **Never interpolate anything into `SYSTEM_PROMPT`.**
 
 ### Eval runtimes
 
-| Command | Time |
-|---|---|
-| `pytest` | ~75 s |
-| `pytest -m slow` | ~4 min (real LLM calls) |
-| `eval_retrieval` | ~6-9 min (reranker dominates) |
-| `eval_answers` | ~30 min |
-| `eval_conversations` | ~8 min |
+| Command | A | B |
+|---|---|---|
+| `pytest` | ~75 s | **27 s** |
+| `pytest -m slow` | ~4 min (real LLM calls) | **36 s** |
+| `eval_retrieval` | ~6-9 min (reranker dominates) | **~1 min** |
+| `eval_answers` | ~30 min | **8.3 min** (mean 9.5 s/answer) |
+| `eval_conversations` | ~8 min | **1.7 min** |
 
 ---
 
@@ -297,6 +382,18 @@ wherever they disagree.**
 
 - **Config, not constants.** Every threshold lives in `src/config.py` so the
   eval can sweep it.
+- **Progress reporting is additive and must stay that way.**
+  `RetrievalResult.stages` carries `bm25_ms`, `vector_ms`, `fuse_ms`,
+  `rerank_ms`, `fused_count` and `code_boosted` purely so the UI can show
+  which sub-step was slow. Delete every one of them and the hits, their order
+  and their scores are unchanged -- that is the property to preserve. They
+  reach the browser inside the `searched` stage frame.
+- **The UI never hard-codes a model name.** Each sub-step in the step
+  inspector carries a tool chip, and the four model chips resolve from
+  `/health` at run time (`{m:'llm'|'embed'|'rewrite'|'reranker'}`). All four
+  are `.env`-overridable, so a literal there would eventually name a model the
+  server is not running -- worse than naming nothing. Chips render as
+  `local model` until `/health` answers, then correct themselves.
 - **Refusal and failure are different channels.** A technical failure must
   **never** be reported as "I don't know" — that is plan risk R11. Refusals
   travel as tokens; failures travel as `error` events. `eval_answers.py` scores
@@ -307,6 +404,12 @@ wherever they disagree.**
   deviation above is annotated at its call site.
 - Tests that need a real LLM are marked `@pytest.mark.slow` and excluded by
   default.
+- **The example picker offers only measured questions.** Every entry in
+  `EXAMPLES` in `index.html` is copied verbatim from
+  `rag_chatbot_kit/eval/eval_questions.csv`, so the UI can never suggest a
+  question the project has no evidence about. Q33 is deliberately omitted
+  (section 9). The Bangla entry must keep the CSV's DECOMPOSED `ড়`
+  (U+09A1 U+09BC), not precomposed U+09DC -- see the NFC trap in section 7.
 - Filenames never reach the reader: the model cites `[employee_handbook_v3.md]`,
   the UI strips it and lists clean document titles instead.
 
@@ -319,6 +422,20 @@ wherever they disagree.**
   retrieved chunk and the completeness rule names this exact shape of mistake.
   Left as-is rather than patched with a Q33-shaped instruction, which would be
   tuning to the test.
+  **Verified still failing on machine B, where the judge wrongly passed it.**
+  The judge printed `CORRECT` while its own stated reason ended "...though it
+  omits the price for guests", producing a headline 40/40. The answer contains
+  no `২০০`. **Always audit Q33's CSV row before quoting a 40/40.** This is the
+  optimistic twin of the pessimistic misgrade in §7 — the judge errs in *both*
+  directions.
+- **C1 turn 3 ("And what about sick leave?") fails on machine B** and passed on
+  A. Reproducible across four runs, not flaky. `rewrite_query` returns the
+  question unchanged and the rewrite model echoes it verbatim **with no
+  exception** — so this is *not* the silent-fallback bug in §6.4; `think:false`
+  works. The model simply judges the question standalone, so "carry forward"
+  never enters the query. Cause is almost certainly AVX-512 kernels shifting a
+  borderline decision at `temperature 0.1`. Not fixed: tuning the rewrite
+  prompt to recover one assertion would be tuning to the test.
 - **Small talk is a fixed phrase list** (`src/chat/smalltalk.py`). An unlisted
   greeting falls through to the relevance floor and gets the out-of-scope
   refusal. Add phrases to the sets; do **not** loosen to prefix matching — that
