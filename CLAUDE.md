@@ -213,6 +213,23 @@ venv from a 3.10 interpreter by full path.
 On Windows also set `PYTHONIOENCODING=utf-8` when running anything that prints
 Bangla, or `cp1252` raises `UnicodeEncodeError` on perfectly good output.
 
+**`num_gpu: 0` is not a preference on machine A, it prevents a crash.**
+Measured 2026-11-11: an `/api/embed` call to `bge-m3` *without* that option
+kills its runner outright —
+
+```
+llama-server process has terminated: exit status 0xc0000409:
+The system detected an overrun of a stack-based buffer
+```
+
+It is reproducible on every attempt and recovers the moment
+`"options":{"num_gpu":0}` is added. Ollama tries to offload to the 2 GB
+GT 1030 and dies. `src/index/embed.py` and `src/chat/llm.py` always send it,
+which is why the application is unaffected — but **any hand-rolled `curl`
+against Ollama on this box must include it too**, or you will spend an hour
+debugging a model that is actually fine. This is plan risk R6 with a concrete
+failure mode rather than the predicted "thrash".
+
 ---
 
 ## 3. Architecture
