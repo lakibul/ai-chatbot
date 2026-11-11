@@ -346,8 +346,8 @@ retrieved documents add 15-25 s of reading before the first token. A 2.4×
 smaller model is only ~2× faster. The real fix is a GPU with ≥4 GB VRAM —
 prefill is the embarrassingly-parallel phase GPUs exist for.
 
-The system prompt (~740 tok) is byte-identical every turn and llama.cpp
-caches it. Documents (~390 tok) are new each question — that is what you pay
+The system prompt (~676 tok, measured) is byte-identical every turn and llama.cpp
+caches it. Documents plus the question (~750 tok at the median: 1,422 median cold prompt − 676) are new each question — that is what you pay
 for. **Never interpolate anything into `SYSTEM_PROMPT`.**
 
 ### Eval runtimes
