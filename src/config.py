@@ -65,6 +65,13 @@ EXPECTED_SOURCE_FILES = 12
 # ------------------------------------------------------------- ollama ------
 OLLAMA_HOST = _env("OLLAMA_HOST", "http://127.0.0.1:11434")
 
+# Serve the whole app under a URL prefix, e.g. "/ai-chatbot", so it can
+# share a host with other services. Empty means mount at "/".
+# NOTE: uvicorn --root-path only ADVERTISES a prefix, it does not route
+# one -- measured, /ai-chatbot/health was a 404. The app is therefore
+# really mounted under this path (see src/api/app.py).
+ROOT_PATH = "/" + _env("ROOT_PATH", "").strip("/") if _env("ROOT_PATH", "") else ""
+
 # Native endpoints only. Plan 2.1: "/api/chat, never /v1/chat/completions" --
 # the OpenAI-compatible path drops Ollama-specific controls.
 OLLAMA_CHAT_URL = f"{OLLAMA_HOST}/api/chat"

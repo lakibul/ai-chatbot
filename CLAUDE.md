@@ -4,6 +4,21 @@ Read this before changing anything. It is the handoff document: what exists,
 why it is built this way, what has already been measured, and the specific
 mistakes that cost time here so they are not repeated.
 
+## RULE — never commit, never push
+
+**The user handles all git commits and pushes themselves. Do not run
+`git commit`, `git push`, `git tag`, `git merge`, `git rebase`, `git reset`,
+`git revert`, `git stash` or anything else that writes to history or to the
+remote. No exceptions, and do not ask for permission to make one.**
+
+Edit files, run tests, build indexes, start the server — all normal. Then
+**stop** and say what changed and why, so the user can review the diff and
+commit it in their own words.
+
+`git status`, `git diff` and `git log` are fine: they only read.
+
+---
+
 **Project:** a fully local, citation-backed RAG chatbot over 12 internal
 documents of a fictional company, Nodi Tech Ltd. No cloud LLM, no API keys.
 

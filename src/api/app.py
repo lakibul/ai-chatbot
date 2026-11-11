@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
@@ -58,7 +58,7 @@ async def lifespan(app: FastAPI):
         retriever.close()
 
 
-app = FastAPI(title="Nodi Tech RAG Chatbot", lifespan=lifespan)
+api = FastAPI(title="Nodi Tech RAG Chatbot", lifespan=lifespan)
 
 
 class AskRequest(BaseModel):
@@ -68,15 +68,24 @@ class AskRequest(BaseModel):
 
 # The page's own assets. Mounted rather than given a route each, but NOT at
 # "/" because that is the page itself.
-app.mount("/assets", StaticFiles(directory=str(STATIC_DIR)), name="assets")
+api.mount("/assets", StaticFiles(directory=str(STATIC_DIR)), name="assets")
 
 
-@app.get("/")
-async def index() -> FileResponse:
-    return FileResponse(STATIC_DIR / "index.html")
+@api.get("/")
+async def index(request: Request) -> HTMLResponse:
+    """Serve the page with its <base> set to wherever it is mounted.
+
+    Behind a reverse proxy the app may live at "/ai-chatbot/" rather than
+    "/". Every URL in the page is relative, so filling the base in here is
+    all that is needed -- uvicorn --root-path, or a proxy sending
+    X-Forwarded-Prefix, supplies the value. Unmounted, it is just "/".
+    """
+    root = (request.scope.get("root_path") or "").rstrip("/")
+    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    return HTMLResponse(html.replace("__BASE__", f"{root}/"))
 
 
-@app.get("/health")
+@api.get("/health")
 async def health() -> JSONResponse:
     """Plan M4.5: Ollama reachability, loaded models, chunk count, freshness."""
     retriever: Retriever | None = state.get("retriever")
@@ -105,20 +114,20 @@ async def health() -> JSONResponse:
     return JSONResponse(body, status_code=200 if body["ok"] else 503)
 
 
-@app.post("/reset")
+@api.post("/reset")
 async def reset(payload: AskRequest) -> JSONResponse:
     state["store"].reset(payload.conversation_id)
     state["store"].save()
     return JSONResponse({"ok": True})
 
 
-@app.get("/conversations")
+@api.get("/conversations")
 async def list_conversations() -> JSONResponse:
     """Sidebar index: titles and timestamps only, never transcripts."""
     return JSONResponse({"conversations": state["store"].summaries()})
 
 
-@app.get("/conversations/{conversation_id}")
+@api.get("/conversations/{conversation_id}")
 async def get_conversation(conversation_id: str) -> JSONResponse:
     conversation = state["store"].find(conversation_id)
     if conversation is None:
@@ -126,12 +135,12 @@ async def get_conversation(conversation_id: str) -> JSONResponse:
     return JSONResponse(conversation.to_dict())
 
 
-@app.delete("/conversations/{conversation_id}")
+@api.delete("/conversations/{conversation_id}")
 async def delete_conversation(conversation_id: str) -> JSONResponse:
     return JSONResponse({"deleted": state["store"].delete(conversation_id)})
 
 
-@app.post("/ask")
+@api.post("/ask")
 async def ask(payload: AskRequest, request: Request) -> EventSourceResponse:
     request_id = uuid.uuid4().hex[:12]
     question = (payload.question or "").strip()
@@ -209,3 +218,19 @@ async def ask(payload: AskRequest, request: Request) -> EventSourceResponse:
         event_stream(),
         ping=int(config.SSE_HEARTBEAT_SECONDS),   # keep proxies from killing it
     )
+
+
+# ---------------------------------------------------------------- mount --
+# `app` is the ASGI application uvicorn serves. With ROOT_PATH set, the API
+# is MOUNTED under it so http://host:8000/ai-chatbot/ actually routes --
+# uvicorn's --root-path alone does not do this, it only tells the app where
+# it thinks it lives, and every /ai-chatbot/* URL 404s.
+#
+# The lifespan must sit on the OUTER app: Starlette does not run lifespan for
+# a mounted sub-application, so preflight and the Retriever would never
+# initialise and every request would fail on a None engine.
+if config.ROOT_PATH:
+    app = FastAPI(title="Nodi Tech RAG Chatbot", lifespan=lifespan)
+    app.mount(config.ROOT_PATH, api)
+else:
+    app = api

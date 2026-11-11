@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Replaced by the server with its root path, so a reverse proxy can
+     mount the app under any prefix. Every URL below is RELATIVE. -->
+<base href="__BASE__">
 <title>Nodi Tech Assistant</title>
 <style>
   /* No external fonts or CDNs anywhere: the project must work offline. */
@@ -157,6 +160,8 @@
   .ghost:hover{background:var(--active);color:var(--ink);}
   .ghost svg{width:15px;height:15px;}
   #burger{display:none;}
+  .scrim{display:none;}
+  @media (max-width:860px){ .scrim{display:block;} }
 
   /* `contain` stops a flick past the end of the thread from being handed
      on to an ancestor -- the chaining that makes a page feel like it has a
@@ -527,13 +532,24 @@
   @media (max-width:860px){
     .sidebar{position:fixed;inset:0 auto 0 0;z-index:40;transform:translateX(-100%);
              transition:transform .18s ease;}
-    .sidebar.open{transform:none;box-shadow:0 0 0 100vmax rgba(0,0,0,.35);}
+    .sidebar.open{transform:none;box-shadow:2px 0 18px rgba(0,0,0,.28);}
+    /* A real element, not the box-shadow trick this used to use. A shadow
+       dims the page but cannot receive a tap, so the only way out of the
+       sidebar was the button. */
+    .scrim{
+      position:fixed;inset:0;z-index:39;background:rgba(0,0,0,.38);
+      opacity:0;transition:opacity .18s ease;
+    }
+    .scrim.on{opacity:1;}
     #burger{display:grid;}
     .thread,.composer,.legal,.arch,.home-block{max-width:none;}
     .thread,.arch{padding-left:18px;padding-right:18px;}
     .composer-wrap{padding-left:18px;padding-right:18px;}
     .home-block{padding-left:18px;padding-right:18px;}
     .turn.user .bubble{max-width:88%;}
+    /* The disclaimer is a footnote, not a headline. At phone width it was
+       taking two full lines directly under the input. */
+    .legal{font-size:9.5px;line-height:1.35;margin-top:6px;opacity:.85;}
     .home-title{font-size:24px;}
     .frow{grid-template-columns:1fr;}
   }
@@ -541,6 +557,8 @@
 </head>
 <body>
 <div class="app">
+
+  <div class="scrim" id="scrim" hidden></div>
 
   <aside class="sidebar" id="sidebar">
     <div class="side-head">
@@ -651,6 +669,40 @@ let conversationId = newId();
 let busy = false, controller = null, view = 'home';
 
 function newId(){ return 'c-' + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+/* Never steal focus on a touch device. Calling input.focus() there throws the
+   on-screen keyboard up, which covers half the screen and scrolls the answer
+   out of view -- on a phone the keyboard should appear only when the person
+   taps the box themselves. Checked live rather than cached, so it stays right
+   if a tablet gains or loses a keyboard. */
+function canAutofocus(){
+  return !matchMedia('(hover: none) and (pointer: coarse)').matches;
+}
+function focusInput(){ if(canAutofocus()) input.focus(); }
+
+/* The overlay sidebar must be dismissible every way a person will try:
+   the button, a tap on the page behind it, or Escape. Previously only the
+   button worked, which is a trap on a phone where the sidebar covers most
+   of the screen and the button is easy to miss. */
+function openSidebar(){
+  sidebar.classList.add('open');
+  const sc = $('scrim');
+  sc.hidden = false;
+  // Next frame, so the opacity transition has a starting value to animate
+  // from rather than appearing instantly.
+  requestAnimationFrame(() => sc.classList.add('on'));
+}
+function closeSidebar(){
+  sidebar.classList.remove('open');
+  const sc = $('scrim');
+  sc.classList.remove('on');
+  // Keep it in the layout until the fade finishes, then take it out so it
+  // can never sit invisibly over the page and swallow taps.
+  setTimeout(() => { if(!sidebar.classList.contains('open')) sc.hidden = true; }, 200);
+}
+function toggleSidebar(){
+  if(sidebar.classList.contains('open')) closeSidebar(); else openSidebar();
+}
 function el(t,c,x){ const n=document.createElement(t); if(c)n.className=c; if(x!==undefined)n.textContent=x; return n; }
 function atBottom(){ return scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 130; }
 
@@ -796,7 +848,7 @@ function setView(next){
                           : next === 'chat' ? threadTitle.dataset.title || '' : '';
   if(home) composerSlot.appendChild(composerWrap);
   else if(next === 'chat') main.appendChild(composerWrap);
-  if(next !== 'arch') input.focus();
+  if(next !== 'arch') focusInput();
   releasePad();
   scroll.scrollTop = 0;
 }
@@ -1391,7 +1443,7 @@ async function ask(question){
   controller = new AbortController();
 
   try{
-    const res = await fetch('/ask',{
+    const res = await fetch('ask',{
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({question, conversation_id: conversationId}),
       signal: controller.signal,
@@ -1487,7 +1539,7 @@ async function ask(question){
 
   controller = null; busy = false; setSending(false);
   refreshConversations();
-  input.focus();
+  focusInput();
 }
 
 function setSending(on){
@@ -1509,7 +1561,7 @@ function dayLabel(ts){
 async function refreshConversations(){
   let list = [];
   try{
-    const r = await fetch('/conversations');
+    const r = await fetch('conversations');
     list = (await r.json()).conversations || [];
   }catch{ return; }
 
@@ -1533,7 +1585,7 @@ async function refreshConversations(){
     del.innerHTML = ICON_TRASH;
     del.addEventListener('click', async ev => {
       ev.stopPropagation();
-      try{ await fetch('/conversations/' + encodeURIComponent(c.conversation_id), {method:'DELETE'}); }catch{}
+      try{ await fetch('conversations/' + encodeURIComponent(c.conversation_id), {method:'DELETE'}); }catch{}
       if(c.conversation_id === conversationId) startNew();
       refreshConversations();
     });
@@ -1559,7 +1611,7 @@ async function openConversation(id, title){
   if(busy && controller) controller.abort();
   let data;
   try{
-    const r = await fetch('/conversations/' + encodeURIComponent(id));
+    const r = await fetch('conversations/' + encodeURIComponent(id));
     if(!r.ok) return;
     data = await r.json();
   }catch{ return; }
@@ -1587,7 +1639,7 @@ async function openConversation(id, title){
     }
   });
 
-  sidebar.classList.remove('open');
+  closeSidebar();
   refreshConversations();
   down(true);
 }
@@ -1598,7 +1650,7 @@ function startNew(){
   log.innerHTML = '';
   threadTitle.dataset.title = '';
   setView('home');
-  sidebar.classList.remove('open');
+  closeSidebar();
   refreshConversations();
 }
 
@@ -1640,7 +1692,7 @@ exBtn.innerHTML = ICON_BULB;
            cost a keystroke, not a 20-second answer to the wrong question. */
         input.value = q;
         openPicker(false);
-        input.focus();
+        focusInput();
         input.setSelectionRange(q.length, q.length);
         input.style.height = 'auto';
         input.style.height = Math.min(input.scrollHeight, 192) + 'px';
@@ -1679,21 +1731,25 @@ window.addEventListener('resize', () => {
   follow();
 });
 
-$('newchat').addEventListener('click', () => { startNew(); input.focus(); });
+$('newchat').addEventListener('click', () => { startNew(); focusInput(); });
 $('navarch').addEventListener('click', () => {
   setView('arch');
-  sidebar.classList.remove('open');
+  closeSidebar();
 });
 function setSidebar(hidden){
   document.querySelector('.app').classList.toggle('nosidebar', hidden);
-  sidebar.classList.remove('open');
+  closeSidebar();
   try{ localStorage.setItem('nodi-sidebar', hidden ? 'hidden' : 'shown'); }catch{}
 }
 $('sidetoggle').addEventListener('click', () => setSidebar(true));
+$('scrim').addEventListener('click', closeSidebar);
+document.addEventListener('keydown', e => {
+  if(e.key === 'Escape' && sidebar.classList.contains('open')) closeSidebar();
+});
 $('burger').addEventListener('click', () => {
   // Narrow screens slide the sidebar over the page; wide screens restore it.
   if(document.querySelector('.app').classList.contains('nosidebar')) setSidebar(false);
-  else sidebar.classList.toggle('open');
+  else toggleSidebar();
 });
 try{
   if(localStorage.getItem('nodi-sidebar') === 'hidden') setSidebar(true);
@@ -1717,7 +1773,7 @@ STARTERS.forEach(t => {
   startersEl.appendChild(b);
 });
 
-fetch('/health').then(r => r.json()).then(h => {
+fetch('health').then(r => r.json()).then(h => {
   health = h;
   refreshTools();
   $('footstat').textContent = h.ok ? h.index.chunks + ' passages indexed' : 'degraded';
@@ -1738,6 +1794,6 @@ setView('home');
 setSending(false);
 refreshConversations();
 </script>
-<script src="/assets/architecture.js"></script>
+<script src="assets/architecture.js"></script>
 </body>
 </html>
