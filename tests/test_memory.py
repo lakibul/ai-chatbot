@@ -48,9 +48,9 @@ def test_window_starts_on_a_user_turn():
     for i in range(6):
         c.add_user(f"q{i}")
         c.add_assistant(f"a{i}")
-    window = c.window(5)
+    window = c.window(2)          # 2 TURNS = 2 questions + 2 answers
     assert window[0]["role"] == "user"
-    assert len(window) <= 5
+    assert len(window) == 4
 
 
 def test_window_of_a_fresh_conversation_is_empty():
@@ -197,3 +197,65 @@ def test_assistant_turn_without_citations_stays_clean():
     c.add_user("q")
     c.add_assistant("an answer")
     assert "citations" not in c.turns[-1]
+
+
+# -------------------------------- brief M4: "the last 6 turns are kept" ------
+def _chat(n_turns: int) -> Conversation:
+    c = Conversation("x")
+    for i in range(1, n_turns + 1):
+        c.add_user(f"question {i}")
+        c.add_assistant(f"answer {i}")
+    return c
+
+
+def test_default_window_keeps_six_turns_not_six_messages():
+    """The regression. HISTORY_TURNS = 6 used to slice the last 6 MESSAGES,
+    which is 3 questions and 3 answers -- half of what the brief asks."""
+    from src import config
+
+    assert config.HISTORY_TURNS == 6
+    window = _chat(8).window()
+    questions = [m["content"] for m in window if m["role"] == "user"]
+    assert questions == [f"question {i}" for i in range(3, 9)], questions
+    assert len(window) == 12
+
+
+def test_each_kept_turn_carries_its_answer():
+    window = _chat(8).window()
+    contents = [m["content"] for m in window]
+    for i in range(3, 9):
+        assert contents.index(f"answer {i}") == contents.index(f"question {i}") + 1
+
+
+def test_window_never_splits_a_turn():
+    """Oldest kept message is always a user question, newest an answer."""
+    for n in (1, 2, 5, 6, 7, 20):
+        window = _chat(n).window()
+        assert window[0]["role"] == "user"
+        assert window[-1]["role"] == "assistant"
+        assert len(window) % 2 == 0
+
+
+def test_short_conversation_is_kept_whole():
+    window = _chat(2).window()
+    assert [m["content"] for m in window] == [
+        "question 1", "answer 1", "question 2", "answer 2"]
+
+
+def test_window_turns_argument_counts_turns():
+    window = _chat(8).window(1)
+    assert [m["content"] for m in window] == ["question 8", "answer 8"]
+
+
+def test_exactly_six_turns_loses_nothing_and_seven_drops_the_oldest():
+    six = [m["content"] for m in _chat(6).window() if m["role"] == "user"]
+    seven = [m["content"] for m in _chat(7).window() if m["role"] == "user"]
+    assert six[0] == "question 1" and len(six) == 6
+    assert seven[0] == "question 2" and len(seven) == 6
+
+
+def test_the_briefs_own_conversation_fits_with_room_to_spare():
+    """C1 in conversation_tests.json has 3 turns. A 6-turn window must hold
+    all of it, which is what lets turn 3 see turn 1."""
+    window = _chat(3).window()
+    assert len(window) == 6

@@ -28,15 +28,14 @@ echo   This machine:  http://127.0.0.1:8000/ai-chatbot
 echo.
 echo   Other devices on this network:
 REM Parsing ipconfig by token position is fragile; ask Windows directly.
-for /f "delims=" %%a in ('powershell -NoProfile -Command "(Get-NetIPAddress -AddressFamily IPv4 ^| Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' }).IPAddress"') do (
+for /f "delims=" %%a in ('powershell -NoProfile -Command "(Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' }).IPAddress"') do (
   echo                  http://%%a:8000/ai-chatbot
 )
 echo.
 echo   If other devices cannot connect, open PowerShell as Administrator
 echo   and run this once:
 echo.
-echo     New-NetFirewallRule -DisplayName 'Nodi 8000' -Direction Inbound ^
-echo       -LocalPort 8000 -Protocol TCP -Action Allow -Profile Any
+echo     New-NetFirewallRule -DisplayName 'Nodi 8000' -Direction Inbound -LocalPort 8000 -Protocol TCP -Action Allow -Profile Any
 echo.
 echo   Press Ctrl+C to stop the server.
 echo.

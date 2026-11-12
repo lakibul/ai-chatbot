@@ -85,15 +85,27 @@ class Conversation:
             self.turns[-1]["timings"] = timings
 
     def window(self, turns: int | None = None) -> list[dict[str, str]]:
-        """The last N messages, oldest first.
+        """The last N TURNS, oldest first.
 
-        Always starts on a user message: a window beginning with an assistant
-        reply reads as if the model spoke first, which confuses the rewriter.
+        One turn is one question the user asked plus the answer it got, so
+        N turns is up to 2N messages. That is the meaning the brief gives the
+        word: in conversation_tests.json each "turn" is one user line, and
+        M4 asks for "the last 6 turns are kept".
+
+        This used to slice the last N MESSAGES. HISTORY_TURNS = 6 therefore
+        kept only 3 questions and 3 answers -- half of what the brief asks --
+        and nothing noticed, because the name said "turns", the evaluation
+        conversations have only 3 turns, and no test counted. The window is
+        now cut at the Nth-from-last USER message, so it also always starts
+        on a user message (a window beginning with an assistant reply reads
+        as if the model spoke first, which confuses the rewriter).
         """
         turns = turns or config.HISTORY_TURNS
-        recent = self.turns[-turns:]
-        while recent and recent[0]["role"] != "user":
-            recent = recent[1:]
+        user_positions = [i for i, t in enumerate(self.turns) if t["role"] == "user"]
+        if not user_positions:
+            return []
+        start = user_positions[-turns] if len(user_positions) >= turns else user_positions[0]
+        recent = self.turns[start:]
         # Project to exactly what the chat API accepts. Anything stored for
         # the UI's benefit (citations) must not reach the model.
         return [{"role": t["role"], "content": t["content"]} for t in recent]

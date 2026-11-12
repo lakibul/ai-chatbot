@@ -266,9 +266,9 @@ def test_conversation_window_starts_on_a_user_turn():
     for index in range(6):
         conversation.add_user(f"q{index}")
         conversation.add_assistant(f"a{index}")
-    window = conversation.window(5)
+    window = conversation.window(2)          # 2 TURNS = 2 questions + 2 answers
     assert window[0]["role"] == "user"
-    assert len(window) <= 5
+    assert len(window) == 4
 
 
 def test_conversation_store_isolates_conversations():

@@ -147,6 +147,10 @@ RERANKER_FALLBACK = _env("RERANKER_FALLBACK", "Xenova/ms-marco-MiniLM-L-6-v2")
 COLLECTION_NAME = _env("COLLECTION_NAME", "nodi_docs")
 
 # ---------------------------------------------------------------- chat -----
+# Counts TURNS, not messages: one turn = one question + its answer, so 6 turns
+# is up to 12 messages. Brief M4: "the last 6 turns are kept". Each extra old
+# turn is more text the model must read (~40 tokens, ~1.7 s at the measured
+# 23.9 tok/s prefill) -- only chats longer than 3 questions pay it.
 HISTORY_TURNS = _env_int("HISTORY_TURNS", 6)
 MAX_INPUT_CHARS = _env_int("MAX_INPUT_CHARS", 2000)
 REWRITE_MAX_TOKENS = _env_int("REWRITE_MAX_TOKENS", 40)

@@ -18,6 +18,8 @@ Every answer cites the document it came from. When the documents don't cover a q
 
 ---
 
+> **Commands only, copy-paste, including what to do after `git pull`:** [`SETUP.md`](SETUP.md)
+
 ## Setup from a fresh clone
 
 Everything below is required. A clone contains **no indexes, no virtual
@@ -312,6 +314,7 @@ src/
 eval/                   retrieval, answers, conversations, floor, report
 tests/                  ingest, retrieve, errors, preflight, guardrails
 storage/                indexes, model cache, logs  (gitignored)
+SETUP.md                Commands only: first-time setup, daily start, after git pull
 CLAUDE.md               Handoff doc: architecture, measurements, gotchas
 plan.md                 Build plan §1-10, measured reality §11
 ```

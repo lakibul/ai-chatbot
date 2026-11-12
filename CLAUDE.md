@@ -33,6 +33,9 @@ portability log; §5 below now carries both machines' numbers side by side.
 
 ## 1. Setting this up on a new machine
 
+**Short, copy-paste version — including what to do after every `git pull` — is
+[`SETUP.md`](SETUP.md).** The steps below explain the *why*.
+
 A clone has **no virtual environment, no indexes and no `.env`** — all four
 are generated and gitignored. Run every step below. Budget ~20 minutes, almost
 all of it downloading ~6.5 GB of models.
@@ -407,6 +410,14 @@ wherever they disagree.**
   the wrong reason because `REFUSAL_MARKERS` lacked "no mention of".
 - **Apostrophes replaced by spaces** turned `how's it going` into `how s it
   going`. They are deleted, not spaced.
+- **`HISTORY_TURNS = 6` counted MESSAGES, not turns.** That kept 3 questions and
+  3 answers, half of brief M4's "the last 6 turns are kept". One **turn is a
+  question plus its answer** (the brief's own `conversation_tests.json` uses the
+  word that way), so 6 turns = up to 12 messages. `Conversation.window()` now
+  cuts at the Nth-from-last *user* message. Nothing caught it originally because
+  the eval conversations have only 3 turns. Pinned by `tests/test_memory.py`.
+  The prompt-size measurements quoted elsewhere (max 2,001 tokens) predate this
+  and were taken with 3 turns remembered.
 
 ---
 
