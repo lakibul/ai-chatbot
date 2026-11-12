@@ -98,6 +98,34 @@ def format_documents(hits: list[Hit]) -> str:
     return "\n\n".join(blocks)
 
 
+# A one-line "list every value" reminder placed right NEXT TO the question.
+#
+# Why here and not in SYSTEM_PROMPT: measured on the 4B model, the completeness
+# rule in the system prompt is followed in English but ignored when the question
+# is in Bangla (the answer gave one price where the document lists two). A
+# reminder next to the question, written in the QUESTION'S language, fixed it;
+# the same reminder in English only did not (1 of 3). It is deliberately generic
+# -- no topic, no price, no document name -- so it is a prompt rule, not a patch
+# for one eval question. SYSTEM_PROMPT stays byte-identical so it stays cached;
+# this tail is part of the per-question text, which is never cached anyway.
+REMINDER_EN = (
+    "\nCheck before answering: if the documents give more than one value, price, "
+    "rate, person, group, condition or deadline that applies to this question, "
+    "state ALL of them.")
+REMINDER_BN = (
+    "\nউত্তর দেওয়ার আগে যাচাই করুন: এই প্রশ্নের জন্য ডকুমেন্টে একাধিক মান, দাম, হার, "
+    "ব্যক্তি, দল, শর্ত বা সময়সীমা থাকলে সবগুলো উল্লেখ করুন। আলাদা আলাদা দলের জন্য "
+    "আলাদা মান থাকলে প্রতিটি দলের মান বলুন।")
+
+
+def has_bangla(text: str) -> bool:
+    return any("\u0980" <= ch <= "\u09ff" for ch in text)
+
+
+def completeness_reminder(question: str) -> str:
+    return REMINDER_BN if has_bangla(question) else REMINDER_EN
+
+
 def build_messages(question: str, hits: list[Hit],
                    history: list[dict[str, str]] | None = None
                    ) -> list[dict[str, str]]:
@@ -115,7 +143,8 @@ def build_messages(question: str, hits: list[Hit],
     if documents:
         content = (f"{documents}\n\n"
                    f"Answer this question using only the documents above.\n"
-                   f"Question: {question}")
+                   f"Question: {question}"
+                   f"{completeness_reminder(question)}")
     else:
         content = (f"There are no reference documents for this question.\n"
                    f"Question: {question}")

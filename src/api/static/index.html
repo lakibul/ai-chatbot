@@ -506,6 +506,29 @@
   .stat b{display:block;font-size:21px;font-weight:550;letter-spacing:-.02em;}
   .stat span{font-size:11.5px;color:var(--muted);}
   @media (max-width:760px){.stats{grid-template-columns:repeat(2,1fr);}}
+  /* accuracy page */
+  .stats.three{grid-template-columns:repeat(3,1fr);}
+  @media (max-width:760px){.stats.three{grid-template-columns:repeat(2,1fr);}}
+  .stat small{display:block;margin-top:3px;font-size:11px;color:var(--muted);}
+  .bar{height:7px;border-radius:4px;background:var(--active);overflow:hidden;min-width:70px;}
+  .bar i{display:block;height:100%;background:var(--ok);}
+  .bar.part i{background:var(--warn);}
+  .pill{display:inline-block;font-size:11.5px;font-weight:550;padding:1px 8px;border-radius:99px;
+        border:1px solid var(--line);color:var(--ink-2);white-space:nowrap;}
+  .pill.ok{color:var(--ok);border-color:var(--ok);}
+  .pill.bad{color:var(--warn);border-color:var(--warn-line);background:var(--warn-bg);}
+  .arch .callout.warn{border-left-color:var(--warn);background:var(--warn-bg);}
+  .arch .srcnote{font-size:11.5px;color:var(--muted);margin:-4px 0 14px;}
+  .arch details.q{border-bottom:1px solid var(--line-2);}
+  .arch details.q summary{cursor:pointer;padding:9px 0;display:flex;gap:10px;align-items:baseline;
+        color:var(--ink-2);list-style:none;}
+  .arch details.q summary::-webkit-details-marker{display:none;}
+  .arch details.q summary .qid{font-family:ui-monospace,Consolas,monospace;font-size:12px;
+        color:var(--muted);width:34px;flex:none;}
+  .arch details.q summary .qt{flex:1;min-width:0;}
+  .arch details.q .qbody{padding:2px 0 14px 44px;font-size:13px;color:var(--ink-2);}
+  .arch details.q .qbody p{margin:0 0 8px;}
+  .arch details.q .qbody b{color:var(--ink);font-weight:550;}
 
   /* flow diagram — plain boxes and rules, no drawing library */
   .flow{margin:0 0 6px;}
@@ -585,6 +608,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="8.5" y="14" width="7" height="7" rx="1.5"/><path d="M6.5 10v2.5h11V10M12 12.5V14"/></svg>
         Architecture
       </button>
+      <button class="navbtn" id="navacc">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+        Accuracy
+      </button>
     </div>
     <nav class="convos" id="convos"></nav>
     <div class="side-foot">
@@ -637,6 +664,9 @@
 
       <!-- architecture -->
       <div class="arch" id="arch" hidden></div>
+
+      <!-- accuracy -->
+      <div class="arch" id="acc" hidden></div>
     </div>
 
     <div class="composer-wrap" id="composerwrap">
@@ -659,7 +689,7 @@
 
 const $ = id => document.getElementById(id);
 const main=$('main'), log=$('log'), thread=$('thread'), homeblock=$('homeblock'),
-      arch=$('arch'), scroll=$('scroll'), topbar=$('topbar'),
+      arch=$('arch'), acc=$('acc'), scroll=$('scroll'), topbar=$('topbar'),
       form=$('form'), input=$('q'), sendBtn=$('send'), legal=$('legal'),
       composerWrap=$('composerwrap'), composerSlot=$('composerslot'),
       convosEl=$('convos'), threadTitle=$('threadtitle'), sidebar=$('sidebar'),
@@ -838,17 +868,20 @@ function setView(next){
   homeblock.hidden = !home;
   thread.hidden = next !== 'chat';
   arch.hidden = next !== 'arch';
+  acc.hidden = next !== 'acc';
   if(next !== 'chat') releasePad();
-  composerWrap.hidden = next === 'arch';
+  composerWrap.hidden = next === 'arch' || next === 'acc';
   if(typeof openPicker === 'function') openPicker(false);
   legal.hidden = home;
   $('navarch').classList.toggle('on', next === 'arch');
+  $('navacc').classList.toggle('on', next === 'acc');
   syncSidebarActive();
   threadTitle.textContent = next === 'arch' ? 'Architecture'
+                          : next === 'acc' ? 'Accuracy'
                           : next === 'chat' ? threadTitle.dataset.title || '' : '';
   if(home) composerSlot.appendChild(composerWrap);
   else if(next === 'chat') main.appendChild(composerWrap);
-  if(next !== 'arch') focusInput();
+  if(next !== 'arch' && next !== 'acc') focusInput();
   releasePad();
   scroll.scrollTop = 0;
 }
@@ -1608,6 +1641,7 @@ function syncSidebarActive(){
 }
 
 async function openConversation(id, title){
+  histPos = null; histDraft = '';
   if(busy && controller) controller.abort();
   let data;
   try{
@@ -1645,6 +1679,7 @@ async function openConversation(id, title){
 }
 
 function startNew(){
+  histPos = null; histDraft = '';
   if(busy && controller) controller.abort();
   conversationId = newId();
   log.innerHTML = '';
@@ -1659,16 +1694,57 @@ form.addEventListener('submit', e => {
   e.preventDefault();
   if(busy){ if(controller) controller.abort(); return; }
   const q = input.value;
+  histPos = null; histDraft = '';
   input.value = ''; input.style.height = 'auto';
   ask(q);
 });
-input.addEventListener('keydown', e => {
-  if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); form.requestSubmit(); }
-});
-input.addEventListener('input', () => {
+/* Up / Down recall, like a terminal. The list is read from the user bubbles on
+   screen, so it works for a live conversation and for one reopened from the
+   sidebar, and never holds a stale copy. The unsent draft is kept and comes
+   back when Down goes past the newest message. */
+const NL = String.fromCharCode(10);
+let histPos = null, histDraft = '';
+function userMessages(){
+  return Array.from(log.querySelectorAll('.turn.user .text')).map(n => n.textContent);
+}
+function resizeInput(){
   input.style.height = 'auto';
   input.style.height = Math.min(input.scrollHeight, 192) + 'px';
   if(!busy) sendBtn.disabled = !input.value.trim();
+}
+function showHistory(text){
+  input.value = text;
+  resizeInput();
+  input.setSelectionRange(text.length, text.length);
+}
+input.addEventListener('keydown', e => {
+  if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); form.requestSubmit(); return; }
+  if(e.isComposing || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+  if(e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+  const msgs = userMessages();
+  const atStart = input.selectionStart === input.selectionEnd &&
+                  !input.value.slice(0, input.selectionStart).includes(NL);
+  const atEnd = input.selectionStart === input.selectionEnd &&
+                !input.value.slice(input.selectionEnd).includes(NL);
+  if(e.key === 'ArrowUp'){
+    /* only when the caret is on the first line, so Up still moves the caret
+       inside a multi-line draft */
+    if(!msgs.length || !atStart) return;
+    if(histPos === null){ histDraft = input.value; histPos = msgs.length; }
+    if(histPos > 0) histPos--;
+    e.preventDefault();
+    showHistory(msgs[histPos]);
+  } else {
+    if(histPos === null || !atEnd) return;
+    e.preventDefault();
+    histPos++;
+    if(histPos >= msgs.length){ histPos = null; showHistory(histDraft); }
+    else showHistory(msgs[histPos]);
+  }
+});
+input.addEventListener('input', () => {
+  histPos = null;               /* typing ends recall: the text is now a new draft */
+  resizeInput();
 });
 
 /* ------------------------------------------------- the example picker -- */
@@ -1736,6 +1812,10 @@ $('navarch').addEventListener('click', () => {
   setView('arch');
   closeSidebar();
 });
+$('navacc').addEventListener('click', () => {
+  setView('acc');
+  closeSidebar();
+});
 function setSidebar(hidden){
   document.querySelector('.app').classList.toggle('nosidebar', hidden);
   closeSidebar();
@@ -1795,5 +1875,7 @@ setSending(false);
 refreshConversations();
 </script>
 <script src="assets/architecture.js"></script>
+<script src="assets/accuracy-data.js"></script>
+<script src="assets/accuracy.js"></script>
 </body>
 </html>

@@ -327,3 +327,30 @@ def test_unknown_citation_marker_does_not_empty_the_list():
 
     cites = [{"doc_id": "a.md", "title": "A"}]
     assert used_citations("See [not_retrieved.md]", cites) == cites
+
+
+# --- completeness reminder (placed next to the question, in its language) ----
+
+def test_reminder_is_in_the_question_language():
+    from src.chat.prompts import REMINDER_BN, REMINDER_EN
+    bn = build_messages("ক্যান্টিনে দুপুরের খাবারের দাম কত?", [_hit("a.md", "x")])[-1]["content"]
+    en = build_messages("What does lunch cost?", [_hit("a.md", "x")])[-1]["content"]
+    assert bn.endswith(REMINDER_BN) and REMINDER_EN not in bn
+    assert en.endswith(REMINDER_EN) and REMINDER_BN not in en
+
+
+def test_reminder_is_not_added_when_there_are_no_documents():
+    content = build_messages("anything", [])[-1]["content"]
+    assert "Check before answering" not in content
+
+
+def test_reminder_never_touches_the_cached_system_prompt():
+    bn = build_messages("ক্যান্টিনে দাম কত?", [_hit("a.md", "x")])[0]["content"]
+    assert bn == SYSTEM_PROMPT
+
+
+def test_reminder_is_generic_not_shaped_like_one_eval_question():
+    """It must be a prompt rule, not a patch for one test question."""
+    from src.chat.prompts import REMINDER_BN, REMINDER_EN
+    for banned in ("canteen", "lunch", "guest", "80", "200", "ক্যান্টিন", "অতিথি", "৮০", "২০০"):
+        assert banned not in REMINDER_EN.lower() and banned not in REMINDER_BN
