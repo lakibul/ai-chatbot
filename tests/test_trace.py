@@ -240,7 +240,7 @@ def test_index_wires_the_pipeline_in():
 def test_steps_and_pipeline_are_an_accordion_that_opens_at_the_first_step():
     html = (STATIC / "index.html").read_text(encoding="utf-8")
     body = html[html.index("function setPanel(which, byUser)"):]
-    body = body[:body.index("setPanel(stepsOpen ?")]
+    body = body[:body.index("ptoggle.addEventListener")]
     # opening one closes the other
     assert "list.hidden = !wantSteps" in body and "showPipeline(wantPipe)" in body
     # opening the pipeline scrolls to ITS top and stops following the stream,
@@ -277,3 +277,15 @@ def test_every_pipeline_step_names_its_algorithm_or_library():
     assert "'BM25 · rank_bm25'" in js                      # the keyword search says BM25
     # model-running steps take the model's own name from the data or /health
     assert "models: () => (health && health.models) || {}" in (STATIC / "index.html").read_text(encoding="utf-8")
+
+
+def test_pipeline_opens_by_itself_for_every_answer_and_nothing_else_does():
+    html = (STATIC / "index.html").read_text(encoding="utf-8")
+    # nothing about the panels is remembered, so a saved preference can never keep it shut
+    assert "nodi-pipeline" not in html and "nodi-steps" not in html
+    # it opens on the first progress event (a canned greeting sends none)
+    assert "autoOpen(){" in html and "proc.autoOpen();" in html
+    # everything starts closed; the reader opens the rest by hand
+    assert "setPanel(null, false);" in html
+    # and a new question folds the earlier answers' panels away
+    assert "allProcs.forEach(p => p.collapse())" in html

@@ -876,14 +876,15 @@ function follow(smooth){
 }
 
 /* Where following the stream should land. Normally the bottom of the thread.
-   With a pipeline open it is capped so the bottom edge of the view sits
-   about 170px into the pipeline (its bar, stage strip and first step), but
-   never above the parked question. A long answer is still followed. */
+   With a pipeline open it is capped so the pipeline's top edge sits about
+   40% of the way down the view: its bar, stage strip and first steps are
+   visible, with the end of the answer above them. It never goes above the
+   parked question, and a long answer is still followed. */
 function followTarget(){
   let target = scroll.scrollHeight - scroll.clientHeight;
   if(liveAnchor && liveAnchor.isConnected){
     const floor = parkTop >= 0 ? parkTop - parkGap : 0;
-    target = Math.min(target, Math.max(floor, contentTop(liveAnchor) + 170 - scroll.clientHeight));
+    target = Math.min(target, Math.max(floor, contentTop(liveAnchor) + scroll.clientHeight * 0.6 - scroll.clientHeight));
   }
   return target;
 }
@@ -1203,17 +1204,15 @@ function refreshTools(){
 }
 const SUBTOTAL = STEPS.reduce((n,s) => n + s.subs.length, 0);
 
-/* Whether the step list is open is a reading preference, not per-answer
-   state: once opened it stays open for every later answer and across
-   reloads, so "show me the steps" only has to be asked once. */
-let stepsOpen = false;
-try{ stepsOpen = localStorage.getItem('nodi-steps') === 'open'; }catch{}
-/* The pipeline is open by default while an answer is being produced, because
-   watching it work is the point; a reopened conversation starts with every
-   pipeline closed so a long thread does not become a wall of diagrams. Steps
-   and Pipeline are an accordion: only one of the two is open at a time. */
-let pipelineOpenLive = true;
-try{ pipelineOpenLive = localStorage.getItem('nodi-pipeline') !== 'closed'; }catch{}
+/* Panel rules. Nothing is remembered between answers or reloads:
+     - the Pipeline opens by itself for every new answer, because watching it
+       work is the point (see autoOpen below);
+     - Steps, and any Pipeline on an earlier answer or in a reopened
+       conversation, open only when the reader clicks them;
+     - Steps and Pipeline are an accordion: one open at a time per answer;
+     - asking a new question folds the earlier answers' panels away, so the
+       thread does not pile up into a wall of diagrams. */
+const allProcs = [];
 
 function fmtMs(ms){
   if(ms === undefined || ms === null || isNaN(ms)) return '';
@@ -1236,7 +1235,7 @@ function makeProcess(bubble, opts){
   const clock = el('div','proc-clock','');
   const toggle = el('button','proc-toggle');
   toggle.type = 'button';
-  toggle.setAttribute('aria-expanded', String(stepsOpen));
+  toggle.setAttribute('aria-expanded', 'false');
   toggle.innerHTML = ICON_STEPS + '<span>Steps</span>' + ICON_CHEV;
   if(!replay) bar.appendChild(ring);
   bar.appendChild(label); bar.appendChild(clock);
@@ -1251,7 +1250,7 @@ function makeProcess(bubble, opts){
   const ppanel = el('div','plpanel');
   wrap.appendChild(ppanel);
   const traceFrames = [], stageFrames = [];
-  let pipe = null, ended = false, lastTimings = null;
+  let pipe = null, ended = false, lastTimings = null, touched = false;
   function ensurePipeline(){
     if(pipe || !window.NodiPipeline) return pipe;
     pipe = NodiPipeline.create(ppanel, {replay: replay,
@@ -1278,11 +1277,7 @@ function makeProcess(bubble, opts){
     toggle.setAttribute('aria-expanded', String(wantSteps));
     showPipeline(wantPipe);
     if(!byUser) return;
-    stepsOpen = wantSteps;
-    try{
-      localStorage.setItem('nodi-steps', wantSteps ? 'open' : 'closed');
-      localStorage.setItem('nodi-pipeline', wantPipe ? 'open' : 'closed');
-    }catch{}
+    touched = true;                      // from now on the reader decides, not autoOpen
     if(wantPipe || wantSteps){
       /* Show the panel from its FIRST line. down() would only follow the
          bottom if the view was already there, and a panel that has just grown
@@ -1296,7 +1291,7 @@ function makeProcess(bubble, opts){
   }
 
   const list = el('ol','steps');
-  list.hidden = !stepsOpen;
+  list.hidden = true;
   const rows = STEPS.map(s => {
     const li = el('li','step pending');
     const mark = el('div','mark');
@@ -1360,7 +1355,8 @@ function makeProcess(bubble, opts){
   });
   wrap.appendChild(list);
   bubble.appendChild(wrap);
-  setPanel(stepsOpen ? 'steps' : (replay ? null : (pipelineOpenLive ? 'pipeline' : null)), false);
+  setPanel(null, false);
+  allProcs.push({collapse: () => setPanel(null, false)});
 
   ptoggle.addEventListener('click', () => {
     setPanel(ptoggle.getAttribute('aria-expanded') === 'true' ? null : 'pipeline', true);
@@ -1461,6 +1457,15 @@ function makeProcess(bubble, opts){
       rows.forEach((r,i) => { if(i > current && !r.started) r.li.remove(); });
     },
     /* One raw-data event for the pipeline. Held until it exists. */
+    /* Opens the pipeline when the real pipeline starts, i.e. on the first
+       progress event, and brings it into view. A canned reply (a greeting)
+       sends none, so it never flashes open and shut. If the reader has
+       already chosen a panel by hand, that choice stands. */
+    autoOpen(){
+      if(replay || touched || ended || !ppanel.hidden) return;
+      setPanel('pipeline', false);
+      if(stick) follow(true);
+    },
     trace(frame){ traceFrames.push(frame); if(pipe) pipe.add(frame); },
     /* The same progress events the step list gets: the pipeline follows them
        too, so it keeps moving even if no raw data arrives. */
@@ -1640,6 +1645,8 @@ async function ask(question){
   if(busy || !question) return;
   busy = true; setSending(true);
   liveAnchor = null;           // the previous answer's pipeline must not steer this one
+  allProcs.forEach(p => p.collapse());   // earlier answers fold away
+  allProcs.length = 0;
 
   const userTurn = addTurn(true, undefined, true);
   userTurn.text.textContent = question;
@@ -1701,6 +1708,7 @@ async function ask(question){
         } else if(event === 'stage'){
           sawStage = true;
           applyStage(proc, bubble, payload);
+          proc.autoOpen();
         } else if(event === 'error'){
           gotDone = true; proc.fail();
           text.className = 'text err';
@@ -1827,6 +1835,7 @@ function syncSidebarActive(){
 
 async function openConversation(id, title){
   histPos = null; histDraft = '';
+  allProcs.length = 0;
   if(busy && controller) controller.abort();
   let data;
   try{
@@ -1865,6 +1874,7 @@ async function openConversation(id, title){
 
 function startNew(){
   histPos = null; histDraft = '';
+  allProcs.length = 0;
   if(busy && controller) controller.abort();
   conversationId = newId();
   log.innerHTML = '';
