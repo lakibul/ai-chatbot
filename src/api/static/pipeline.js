@@ -95,6 +95,65 @@
   /* role: which kind of model this step runs, or null for plain code. */
   const ROLE = { rewrite: 'LLM', llm: 'LLM', embed: 'Embedding', reranker: 'Reranker' };
 
+  /* Side by side: the top of each search's OWN ranking, and which of those
+     passages the answer actually used. This is the evidence for running two
+     searches instead of one -- on an exact code the keyword side wins, on a
+     Bangla document the meaning side wins.
+
+     Honest about what it is NOT: these are the raw scores of each search
+     alone. A keyword-only product would still re-rank its own results, so
+     this is not what such a product would finally answer. */
+  const COMPARE_TOP = 5;
+
+  function compare(all, c) {
+    if (!all) return null;
+    const data = (id) => ((all[id] || {}).data || {});
+    const kTop = (data('bm25').hits || []).slice(0, COMPARE_TOP);
+    const vTop = (data('vector').hits || []).slice(0, COMPARE_TOP);
+    if (!kTop.length && !vTop.length) return null;
+
+    const kept = new Set((data('rerank').candidates || []).filter((x) => x.kept).map((x) => x.id));
+    const cell = (hit) => {
+      if (!hit) return '\u2014';
+      const w = h('span', 'pl-cmp');
+      w.appendChild(h('span', 'pl-mono', hit.id));
+      if (kept.has(hit.id)) w.appendChild(h('span', 'pl-used', 'used'));
+      return w;
+    };
+
+    const box = h('div', 'pl-block');
+    box.appendChild(h('div', 'pl-bt', 'What each search found on its own'));
+    const rows = [];
+    for (let i = 0; i < Math.max(kTop.length, vTop.length); i++) {
+      rows.push([i + 1, cell(kTop[i]), cell(vTop[i])]);
+    }
+    box.appendChild(c.table(['#', 'Top ' + COMPARE_TOP + ' by keyword alone',
+                             'Top ' + COMPARE_TOP + ' by meaning alone'], rows));
+
+    if (kept.size) {
+      const ids = (list) => new Set(list.map((x) => x.id));
+      const kSet = ids(kTop), vSet = ids(vTop);
+      let inK = 0, inV = 0, inNeither = 0;
+      kept.forEach((id) => {
+        if (kSet.has(id)) inK++;
+        if (vSet.has(id)) inV++;
+        if (!kSet.has(id) && !vSet.has(id)) inNeither++;
+      });
+      const was = (n) => n + (n === 1 ? ' was' : ' were');
+      let text = 'Of the ' + kept.size + ' passages the answer used, ' + was(inK) +
+        ' in the keyword top ' + COMPARE_TOP + ' and ' + inV + ' in the meaning top ' + COMPARE_TOP + '.';
+      if (inNeither) {
+        text += ' ' + was(inNeither) + ' in neither \u2014 merging and re-ranking lifted ' +
+          (inNeither === 1 ? 'it' : 'them') + ' from further down.';
+      }
+      box.appendChild(h('p', 'pl-note', text));
+    }
+    box.appendChild(h('p', 'pl-note',
+      'These are the raw scores of each search on its own. A keyword-only system would still ' +
+      're-rank its own results, so this is not what such a system would finally answer.'));
+    return box;
+  }
+
   const NODES = {
     input: {
       title: 'Your question', icon: 'input', role: null, tools: ['engine.py'],
@@ -169,9 +228,12 @@
     fuse: {
       title: 'Merge the two rankings', icon: 'fuse', role: null, tools: ['rrf.py'],
       sum: (d) => plural(d.unique, 'unique passage') + ' after merging (k = ' + d.k + ')',
-      raw: (d, c) => [c.table(['#', 'Passage', 'RRF score', 'Keyword rank', 'Meaning rank'],
-        (d.hits || []).map((x, i) => [i + 1, x.id, num(x.score, 4),
-          (x.ranks || {}).bm25 || '-', (x.ranks || {}).vector || '-']))],
+      raw: (d, c, f, all) => [
+        c.table(['#', 'Passage', 'RRF score', 'Keyword rank', 'Meaning rank'],
+          (d.hits || []).map((x, i) => [i + 1, x.id, num(x.score, 4),
+            (x.ranks || {}).bm25 || '-', (x.ranks || {}).vector || '-'])),
+        compare(all, c),
+      ],
     },
     boost: {
       title: 'Protect exact identifiers', icon: 'boost', role: null, tools: ['code_boost.py'],
@@ -498,7 +560,9 @@
       (p.def.tools || []).forEach((t) => tools.appendChild(h('span', 'pl-tool', t)));
       p.raw.appendChild(tools);
       let out = [];
-      try { out = p.def.raw(f.data || {}, helpers, f) || []; } catch (e) { out = [helpers.note('Could not render this step: ' + e.message)]; }
+      // `frames` so a step can compare itself with the others (the merge step
+      // shows what each search found on its own).
+      try { out = p.def.raw(f.data || {}, helpers, f, frames) || []; } catch (e) { out = [helpers.note('Could not render this step: ' + e.message)]; }
       out.filter(Boolean).forEach((x) => p.raw.appendChild(x));
       const copy = h('button', 'pl-btn pl-copy', 'Copy raw JSON');
       copy.type = 'button';

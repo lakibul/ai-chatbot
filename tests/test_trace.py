@@ -378,3 +378,17 @@ def test_the_home_screen_shows_several_categories():
     assert len(questions) == len(set(questions)), "the same question appears twice"
     # built from EXAMPLES, so the picker and the home screen cannot disagree
     assert "EXAMPLES.find(e => e.g === spec.g)" in html
+
+
+def test_the_merge_step_compares_what_each_search_found_alone():
+    """The evidence for running two searches instead of one. Built from data
+    already in the trace, so it costs no extra work at answer time."""
+    js = (STATIC / "pipeline.js").read_text(encoding="utf-8")
+    assert "function compare(all, c)" in js
+    # a step's renderer is given the other steps, so it can compare
+    assert "p.def.raw(f.data || {}, helpers, f, frames)" in js
+    assert "raw: (d, c, f, all) =>" in js and "compare(all, c)" in js
+    # it marks which of those passages the answer actually used
+    assert "filter((x) => x.kept)" in js and "'pl-used', 'used'" in js
+    # ...and says plainly what it is NOT, so it cannot be over-read
+    assert "keyword-only system would still" in js
