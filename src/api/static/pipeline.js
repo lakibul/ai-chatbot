@@ -148,8 +148,8 @@
       title: 'Keyword search', icon: 'bm25', role: null, tools: ['rank_bm25'],
       sum: (d) => plural((d.hits || []).length, 'passage') + ' matched on words',
       raw: (d, c) => [c.chips('Words searched for', d.query_tokens || []),
-        c.table(['#', 'Passage', 'Document', 'BM25 score'],
-          (d.hits || []).map((x, i) => [i + 1, x.id, x.doc, c.bar(x.score, (d.hits[0] || {}).score, 2)]))],
+        c.table(['#', 'Passage', 'BM25 score'],
+          (d.hits || []).map((x, i) => [i + 1, x.id, c.bar(x.score, (d.hits[0] || {}).score, 2)]))],
     },
     vector: {
       title: 'Meaning search', icon: 'vector', role: 'embed', tools: ['Qdrant'],
@@ -159,14 +159,14 @@
         d.dimension ? c.kv([['Vector length', d.dimension],
                             ['First 8 numbers', '[' + (d.preview || []).join(', ') + ', ...]'],
                             ['Vector size (norm)', d.norm]]) : null,
-        c.table(['#', 'Passage', 'Document', 'Cosine similarity'],
-          (d.hits || []).map((x, i) => [i + 1, x.id, x.doc, c.bar(x.score, 1, 3)]))],
+        c.table(['#', 'Passage', 'Cosine similarity'],
+          (d.hits || []).map((x, i) => [i + 1, x.id, c.bar(x.score, 1, 3)]))],
     },
     fuse: {
       title: 'Merge the two rankings', icon: 'fuse', role: null, tools: ['rrf.py'],
       sum: (d) => plural(d.unique, 'unique passage') + ' after merging (k = ' + d.k + ')',
-      raw: (d, c) => [c.table(['#', 'Passage', 'Document', 'RRF score', 'Keyword rank', 'Meaning rank'],
-        (d.hits || []).map((x, i) => [i + 1, x.id, x.doc, num(x.score, 4),
+      raw: (d, c) => [c.table(['#', 'Passage', 'RRF score', 'Keyword rank', 'Meaning rank'],
+        (d.hits || []).map((x, i) => [i + 1, x.id, num(x.score, 4),
           (x.ranks || {}).bm25 || '-', (x.ranks || {}).vector || '-']))],
     },
     boost: {
@@ -175,15 +175,15 @@
         : plural((d.matched || []).length, 'passage') + ' lifted for ' + (d.codes_in_question || []).join(', '),
       raw: (d, c) => [c.chips('Codes found in the question', d.codes_in_question || []),
         (d.matched || []).length
-          ? c.table(['Passage', 'Document', 'Matched', 'Score after boost'],
-              d.matched.map((x) => [x.id, x.doc, (x.matched || []).join(', '), num(x.score, 1)]))
+          ? c.table(['Passage', 'Matched', 'Score after boost'],
+              d.matched.map((x) => [x.id, (x.matched || []).join(', '), num(x.score, 1)]))
           : c.note('Nothing to boost.')],
     },
     window: {
       title: 'Choose who gets re-read', icon: 'window', role: null, tools: ['pipeline.py'],
       sum: (d) => plural((d.candidates || []).length, 'candidate') + ' shortlisted (limit ' + d.limit + ')',
-      raw: (d, c) => [c.table(['#', 'Passage', 'Document', 'Why it is here'],
-        (d.candidates || []).map((x, i) => [i + 1, x.id, x.doc, x.why]))],
+      raw: (d, c) => [c.table(['#', 'Passage', 'Why it is here'],
+        (d.candidates || []).map((x, i) => [i + 1, x.id, x.why]))],
     },
     rerank: {
       title: 'Re-read each candidate', icon: 'rerank', role: 'reranker', tools: ['ONNX Runtime'],
@@ -191,8 +191,8 @@
         : plural((d.candidates || []).length, 'candidate') + ' scored, best kept',
       raw: (d, c) => !d.available ? [c.note('Reranker could not run: ' + (d.reason || ''))] : [
         c.kv([['Old-policy multiplier', d.superseded_multiplier]]),
-        c.table(['Passage', 'Document', 'Raw score', '0-1 score', 'Final', 'Kept'],
-          (d.candidates || []).map((x) => [x.id, x.doc, x.logit, num(x.probability, 4),
+        c.table(['Passage', 'Raw score', '0-1 score', 'Final', 'Kept'],
+          (d.candidates || []).map((x) => [x.id, x.logit, num(x.probability, 4),
             c.bar(x.score, 1, 4), (x.kept ? 'kept' : '') + (x.demoted ? ' (old policy, halved)' : '')]))],
     },
     floor: {

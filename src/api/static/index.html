@@ -16,7 +16,7 @@
      for status alone. Light is the base; dark re-uses the same roles. */
   :root{
     --bg:#f5f7fa; --side:#ffffff; --raise:#ffffff; --bubble:#e7edf5;
-    --ink:#1b2430; --ink-2:#3b4656; --muted:#667386;
+    --ink:#1b2430; --ink-2:#3b4656; --muted:#5f6b7e;
     --line:#d3d9e2; --line-2:#e4e8ee;
     --accent:#1f4e8c; --accent-ink:#ffffff; --focus:#2563b8; --active:#e6ebf2;
     --warn:#85570a; --warn-bg:#fff7e3; --warn-line:#ecd593;
@@ -26,7 +26,7 @@
   @media (prefers-color-scheme:dark){
     :root:not([data-theme="light"]){
       --bg:#17181a; --side:#0f1011; --raise:#1f2124; --bubble:#2a2d32;
-      --ink:#e6e8eb; --ink-2:#c2c6cc; --muted:#8c929b;
+      --ink:#e6e8eb; --ink-2:#c2c6cc; --muted:#9399a3;
       --line:#34373c; --line-2:#2a2c30;
       --accent:#3f7bc9; --accent-ink:#ffffff; --focus:#7fb0f0; --active:#2a2c31;
       --warn:#e0b45a; --warn-bg:#2a2416; --warn-line:#4c3f1c;
@@ -35,14 +35,14 @@
     }
     :root:not([data-theme="light"]) .sidebar{
       --bg:#0f1011; --raise:#1a1c1f; --bubble:#25282c;
-      --ink:#e6e8eb; --ink-2:#c2c6cc; --muted:#8c929b;
+      --ink:#e6e8eb; --ink-2:#c2c6cc; --muted:#9399a3;
       --line:#2b2e33; --line-2:#222428; --active:#222529;
       border-right-color:#000000;
     }
   }
   :root[data-theme="dark"]{
     --bg:#17181a; --side:#0f1011; --raise:#1f2124; --bubble:#2a2d32;
-    --ink:#e6e8eb; --ink-2:#c2c6cc; --muted:#8c929b;
+    --ink:#e6e8eb; --ink-2:#c2c6cc; --muted:#9399a3;
     --line:#34373c; --line-2:#2a2c30;
     --accent:#3f7bc9; --accent-ink:#ffffff; --focus:#7fb0f0; --active:#2a2c31;
     --warn:#e0b45a; --warn-bg:#2a2416; --warn-line:#4c3f1c;
@@ -51,7 +51,7 @@
   }
   :root[data-theme="dark"] .sidebar{
     --bg:#0f1011; --raise:#1a1c1f; --bubble:#25282c;
-    --ink:#e6e8eb; --ink-2:#c2c6cc; --muted:#8c929b;
+    --ink:#e6e8eb; --ink-2:#c2c6cc; --muted:#9399a3;
     --line:#2b2e33; --line-2:#222428; --active:#222529;
     border-right-color:#000000;
   }
@@ -220,22 +220,51 @@
   /* ------------------------------------------------------ home screen  */
   /* With no conversation open the composer moves into the centre of the
      page, under a title, instead of sitting pinned at the bottom. */
-  .main.home .scroll{display:flex;flex-direction:column;justify-content:center;}
-  .home-block{max-width:740px;margin:0 auto;width:100%;padding:0 28px 40px;}
+  /* Centred when it fits, scrollable from the TOP when it does not. Centring
+     with justify-content clips the top of anything taller than the screen,
+     and that part can never be scrolled to; auto margins do not. */
+  .main.home .scroll{display:flex;flex-direction:column;}
+  .home-block{max-width:740px;margin:auto;width:100%;padding:24px 28px 40px;}
   .home-title{
     display:flex;align-items:center;justify-content:center;gap:13px;
     margin:0 0 26px;font-size:24px;font-weight:600;letter-spacing:-.01em;
   }
   .home-title svg{width:27px;height:27px;flex:none;color:var(--muted);}
   .home-sub{text-align:center;color:var(--muted);font-size:14px;margin:-16px 0 26px;}
-  #starters{margin-top:20px;}
-  .starter{
-    display:block;width:100%;text-align:left;background:transparent;
-    border:0;border-top:1px solid var(--line-2);padding:11px 2px;cursor:pointer;
-    font-size:14.5px;color:var(--ink-2);
+  /* Starter questions: labelled tiles, so a first-time reader can see at a
+     glance what kinds of question the assistant answers. */
+  #starters{margin-top:28px;}
+  .starters-label{
+    font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--muted);margin:0 0 9px;
   }
-  .starter:last-child{border-bottom:1px solid var(--line-2);}
-  .starter:hover{color:var(--ink);}
+  .starter-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .starter{
+    display:flex;flex-direction:column;gap:6px;text-align:left;cursor:pointer;
+    background:var(--raise);border:1px solid var(--line);border-radius:6px;
+    padding:11px 14px 12px;min-height:68px;color:var(--ink);
+    transition:border-color .12s,background-color .12s;
+  }
+  .starter:hover{border-color:var(--accent);}
+  .starter:active{background:var(--active);}
+  .starter .st-tag{
+    font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--muted);
+  }
+  .starter .st-q{font-size:13.5px;line-height:1.45;color:var(--ink);}
+  /* What the product guarantees, in one quiet line. */
+  .home-facts{
+    list-style:none;margin:22px 0 0;padding:14px 0 0;border-top:1px solid var(--line-2);
+    display:flex;flex-wrap:wrap;justify-content:center;gap:8px 26px;
+    font-size:12px;color:var(--muted);
+  }
+  .home-facts li{display:inline-flex;align-items:center;gap:7px;}
+  .home-facts svg{width:14px;height:14px;flex:none;}
+  @media (max-width:600px){
+    .starter-grid{grid-template-columns:1fr;gap:8px;}
+    .starter{min-height:0;padding:9px 12px 10px;gap:4px;}
+    .home-facts{justify-content:flex-start;gap:6px 18px;}
+  }
 
   /* ------------------------------------------------------------- turns  */
   .turn{display:flex;margin-bottom:28px;}
@@ -327,14 +356,14 @@
     opacity:0;visibility:hidden;transition:opacity .12s;
   }
   .info:hover .tip,.info:focus-visible .tip{opacity:1;visibility:visible;}
-  .proc-done .proc-label{font-size:11.5px;}
+  .proc-done .proc-label{font-size:12.5px;color:var(--ink-2);}
   .proc-toggle{
     display:inline-flex;align-items:center;gap:6px;cursor:pointer;
     background:transparent;border:1px solid var(--line);border-radius:4px;
-    color:var(--muted);padding:3px 9px 3px 7px;font-size:11.5px;
+    color:var(--ink-2);padding:3px 10px 3px 8px;font-size:12px;
   }
   .proc-toggle:hover{color:var(--ink);border-color:var(--muted);}
-  .proc-toggle svg{width:12px;height:12px;flex:none;}
+  .proc-toggle svg{width:13px;height:13px;flex:none;}
   .proc-toggle .chev{transition:transform .15s;}
   .proc-toggle[aria-expanded="true"] .chev{transform:rotate(180deg);}
 
@@ -342,10 +371,10 @@
     list-style:none;margin:11px 0 0;padding:11px 0 2px;
     border-top:1px solid var(--line-2);
   }
-  .step{display:flex;gap:10px;align-items:flex-start;padding:4px 0;font-size:13px;}
+  .step{display:flex;gap:10px;align-items:flex-start;padding:4.5px 0;font-size:13.5px;}
   .step .mark{
-    width:15px;height:15px;flex:none;margin-top:3px;border-radius:50%;
-    display:grid;place-items:center;font-size:9px;
+    width:16px;height:16px;flex:none;margin-top:3px;border-radius:50%;
+    display:grid;place-items:center;font-size:9.5px;
     border:1.5px solid var(--line);color:var(--muted);
   }
   .step.done .mark{border-color:var(--ok);color:var(--ok);}
@@ -354,17 +383,17 @@
   .step.pending{color:var(--muted);}
   .step.pending .mark{opacity:.5;}
   .step .body{flex:1;min-width:0;}
-  .step .name{color:var(--ink-2);}
+  .step .name{color:var(--ink);font-weight:500;}
   .step.pending .name{color:var(--muted);}
-  .step .detail{font-size:12px;color:var(--muted);margin-top:1px;
+  .step .detail{font-size:12.5px;color:var(--ink-2);margin-top:1px;
                 overflow-wrap:anywhere;}
-  .step .ms{font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums;
+  .step .ms{font-size:12px;color:var(--ink-2);font-variant-numeric:tabular-nums;
             flex:none;margin-top:1px;}
 
   /* Message clock. Inside the bubble so it travels with the message and
      needs no change to the flex row that aligns user turns right. */
   .stamp{
-    font-size:10.5px;color:var(--muted);margin-top:5px;
+    font-size:11px;color:var(--muted);margin-top:5px;
     font-variant-numeric:tabular-nums;letter-spacing:.01em;
   }
   .turn.user .stamp{text-align:right;opacity:.85;}
@@ -374,12 +403,12 @@
   .step .nrow{display:flex;align-items:center;gap:7px;}
   .step .nrow .name{flex:1;min-width:0;}
   .substoggle{
-    width:18px;height:18px;flex:none;display:grid;place-items:center;padding:0;
+    width:20px;height:20px;flex:none;display:grid;place-items:center;padding:0;
     border:1px solid var(--line);border-radius:5px;background:transparent;
-    color:var(--muted);cursor:pointer;
+    color:var(--ink-2);cursor:pointer;
   }
   .substoggle:hover{color:var(--ink);border-color:var(--muted);}
-  .substoggle svg{width:10px;height:10px;transition:transform .15s;}
+  .substoggle svg{width:11px;height:11px;transition:transform .15s;}
   .substoggle[aria-expanded="true"] svg{transform:rotate(180deg);}
   .step.pending .substoggle{display:none;}
 
@@ -392,12 +421,12 @@
   }
   .substep{
     display:flex;gap:8px;align-items:flex-start;padding:2.5px 0;
-    font-size:12px;color:var(--muted);
+    font-size:12.5px;color:var(--muted);
   }
   .substep .smark{
-    width:11px;height:11px;flex:none;margin-top:3.5px;border-radius:50%;
+    width:13px;height:13px;flex:none;margin-top:3.5px;border-radius:50%;
     border:1.5px solid var(--line);display:grid;place-items:center;
-    font-size:7.5px;line-height:1;
+    font-size:9px;line-height:1;
   }
   .substep.done{color:var(--ink-2);}
   .substep.done .smark{border-color:var(--ok);color:var(--ok);}
@@ -409,7 +438,7 @@
   .substep.skip{opacity:.6;}
   .substep.skip .smark{border-style:dashed;}
   .substep .sbody{flex:1;min-width:0;overflow-wrap:anywhere;}
-  .substep .sval{color:var(--muted);}
+  .substep .sval{color:var(--ink-2);}
   /* The named piece of software that does this sub-step. Monospace because
      these are literal model tags and module names, not prose -- a reader
      should be able to paste one into `ollama list` and have it match. */
@@ -417,13 +446,13 @@
     display:inline-block;margin:1px 0 1px 6px;padding:0 5px;
     border:1px solid var(--line);border-radius:4px;background:var(--raise);
     font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-    font-size:9.5px;line-height:15px;color:var(--muted);
+    font-size:10.5px;line-height:16px;color:var(--ink-2);
     vertical-align:1px;white-space:nowrap;
   }
   .substep.done .tool,.substep.live .tool{color:var(--ink-2);}
   .substep.skip .tool{text-decoration:line-through;opacity:.7;}
   .substep .sms{
-    flex:none;font-size:11px;color:var(--muted);
+    flex:none;font-size:11.5px;color:var(--muted);
     font-variant-numeric:tabular-nums;margin-top:1px;
   }
   .proc-toggle .n{opacity:.75;}
@@ -673,7 +702,15 @@
         </h2>
         <p class="home-sub">Answers from the company's internal documents, with sources.</p>
         <div id="composerslot"></div>
-        <div id="starters"></div>
+        <div id="starters">
+          <div class="starters-label">Try asking</div>
+          <div class="starter-grid" id="startergrid"></div>
+        </div>
+        <ul class="home-facts">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"/></svg>Every answer names its source documents</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/></svg>English and Bangla</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>Runs on this machine, nothing leaves it</li>
+        </ul>
       </div>
 
       <!-- conversation -->
@@ -888,12 +925,16 @@ function revealBlock(node){
   }
 }
 
+/* Every question here is copied verbatim from rag_chatbot_kit/eval/eval_questions.csv,
+   so the screen never suggests a question the project has no evidence about. The
+   Bangla one keeps the CSV's DECOMPOSED letter (see CLAUDE.md, the NFC trap). */
 const STARTERS = [
-  'How many days of annual leave do I get?',
-  'What does error ND-1042 mean?',
-  'What is the hotel limit outside Dhaka?',
-  'What time does the return office bus leave?',
-  'অফিস বাস মিরপুর থেকে কখন ছাড়ে?',
+  {tag:'HR policy', q:'How many days of annual leave do I get?'},
+  {tag:'Error code', q:'What does error ND-1042 mean?'},
+  {tag:'Expenses', q:'What is the hotel limit outside Dhaka?'},
+  {tag:'Transport', q:'What time does the return office bus leave?'},
+  {tag:'Bangla', q:'অফিস বাস মিরপুর থেকে কখন ছাড়ে?'},
+  {tag:'IT security', q:'Within how long must a security incident be reported, and to whom?'},
 ];
 
 const ICON_SEND = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
@@ -1990,10 +2031,12 @@ try{
   if(saved) document.documentElement.setAttribute('data-theme', saved);
 }catch{}
 
-const startersEl = $('starters');
+const startersEl = $('startergrid');
 STARTERS.forEach(t => {
-  const b = el('button','starter', t); b.type='button';
-  b.addEventListener('click', () => ask(t));
+  const b = el('button','starter'); b.type='button';
+  b.appendChild(el('span','st-tag', t.tag));
+  b.appendChild(el('span','st-q', t.q));
+  b.addEventListener('click', () => ask(t.q));
   startersEl.appendChild(b);
 });
 
