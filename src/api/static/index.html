@@ -239,19 +239,28 @@
     color:var(--muted);margin:0 0 9px;
   }
   .starter-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-  .starter{
-    display:flex;flex-direction:column;gap:6px;text-align:left;cursor:pointer;
-    background:var(--raise);border:1px solid var(--line);border-radius:6px;
-    padding:11px 14px 12px;min-height:68px;color:var(--ink);
-    transition:border-color .12s,background-color .12s;
+  /* One card per category: what kind of question it is, then examples. */
+  .scat{
+    border:1px solid var(--line);border-radius:6px;background:var(--raise);
+    padding:11px 13px 8px;min-width:0;
   }
-  .starter:hover{border-color:var(--accent);}
-  .starter:active{background:var(--active);}
-  .starter .st-tag{
-    font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
-    color:var(--muted);
+  .scat-name{font-size:12.5px;font-weight:600;color:var(--ink);}
+  /* Two lines' worth of room whether the text needs it or not, so the question
+     lists line up across a row instead of sitting at ragged heights. */
+  .scat-why{font-size:11.5px;color:var(--muted);line-height:1.45;margin:2px 0 7px;
+            min-height:2.9em;}
+  .scat-q{
+    display:block;width:100%;text-align:left;background:transparent;border:0;
+    border-top:1px solid var(--line-2);padding:7px 0 7px 15px;cursor:pointer;
+    font-size:13px;color:var(--ink-2);line-height:1.45;position:relative;
   }
-  .starter .st-q{font-size:13.5px;line-height:1.45;color:var(--ink);}
+  .scat-q::before{
+    content:"";position:absolute;left:3px;top:13px;width:5px;height:5px;
+    border-right:1.5px solid var(--muted);border-bottom:1.5px solid var(--muted);
+    transform:rotate(-45deg);
+  }
+  .scat-q:hover{color:var(--ink);}
+  .scat-q:hover::before{border-color:var(--accent);}
   /* What the product guarantees, in one quiet line. */
   .home-facts{
     list-style:none;margin:22px 0 0;padding:14px 0 0;border-top:1px solid var(--line-2);
@@ -262,7 +271,9 @@
   .home-facts svg{width:14px;height:14px;flex:none;}
   @media (max-width:600px){
     .starter-grid{grid-template-columns:1fr;gap:8px;}
-    .starter{min-height:0;padding:9px 12px 10px;gap:4px;}
+    /* One column: nothing to line up with, so the reserved second line
+       would only be a gap. */
+    .scat-why{min-height:0;}
     .home-facts{justify-content:flex-start;gap:6px 18px;}
   }
 
@@ -628,6 +639,7 @@
   }
 </style>
 <link rel="stylesheet" href="assets/pipeline.css">
+<link rel="stylesheet" href="assets/context.css">
 </head>
 <body>
 <div class="app">
@@ -926,17 +938,20 @@ function revealBlock(node){
   }
 }
 
-/* Every question here is copied verbatim from rag_chatbot_kit/eval/eval_questions.csv,
-   so the screen never suggests a question the project has no evidence about. The
-   Bangla one keeps the CSV's DECOMPOSED letter (see CLAUDE.md, the NFC trap). */
-const STARTERS = [
-  {tag:'HR policy', q:'How many days of annual leave do I get?'},
-  {tag:'Error code', q:'What does error ND-1042 mean?'},
-  {tag:'Expenses', q:'What is the hotel limit outside Dhaka?'},
-  {tag:'Transport', q:'What time does the return office bus leave?'},
-  {tag:'Bangla', q:'অফিস বাস মিরপুর থেকে কখন ছাড়ে?'},
-  {tag:'IT security', q:'Within how long must a security incident be reported, and to whom?'},
+/* The home screen shows CATEGORIES, built from EXAMPLES below -- the same list
+   the lightbulb picker uses. Deriving it means the two can never disagree, and
+   every question stays verbatim from rag_chatbot_kit/eval/eval_questions.csv,
+   so the screen can never suggest a question the project has no evidence about.
+   `short` is only a shorter heading for a narrow card. */
+const HOME_GROUPS = [
+  {g:'Policies and HR',                   short:'Policies and HR'},
+  {g:'Exact codes and identifiers',       short:'Exact codes'},
+  {g:'Prices and limits, held in tables', short:'Prices and limits'},
+  {g:'Where documents disagree',          short:'Conflicting documents'},
+  {g:'Bangla, and across languages',      short:'Bangla'},
+  {g:'Questions it should refuse',        short:'Should be refused'},
 ];
+const HOME_QUESTIONS_PER_GROUP = 2;
 
 const ICON_SEND = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
 const ICON_STOP = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg>';
@@ -944,6 +959,7 @@ const ICON_TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
 const ICON_STEPS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg>';
 const ICON_DOC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>';
 const ICON_BULB = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.5.4.8 1 .9 1.6l.1.6h5.2l.1-.6c.1-.6.4-1.2.9-1.6A6 6 0 0 0 12 3z"/></svg>';
+const ICON_CONTEXT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="4" rx="1"/><rect x="3" y="15" width="11" height="4" rx="1"/></svg>';
 const ICON_PIPELINE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="7" height="5" rx="1.2"/><rect x="14" y="15" width="7" height="5" rx="1.2"/><path d="M6.5 9v3a3 3 0 0 0 3 3H14"/></svg>';
 const ICON_CHEV_S = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
 const ICON_CHEV = '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
@@ -1242,15 +1258,38 @@ function makeProcess(bubble, opts){
   const ptoggle = el('button','proc-toggle');
   ptoggle.type = 'button';
   ptoggle.innerHTML = ICON_PIPELINE + '<span>Pipeline</span>' + ICON_CHEV;
-  bar.appendChild(el('span','grow')); bar.appendChild(ptoggle); bar.appendChild(toggle);
+  /* Context: how much of the model's window this answer used. Hidden until
+     the server's report arrives; a greeting or refusal never gets one. */
+  const ctoggle = el('button','proc-toggle');
+  ctoggle.type = 'button';
+  ctoggle.hidden = true;
+  ctoggle.setAttribute('aria-expanded', 'false');
+  bar.appendChild(el('span','grow')); bar.appendChild(ptoggle); bar.appendChild(toggle); bar.appendChild(ctoggle);
   wrap.appendChild(bar);
 
   /* The pipeline: the same answer drawn as a flow, with the raw data of each
      step. Built at once while live; on a replay only when first opened. */
   const ppanel = el('div','plpanel');
   wrap.appendChild(ppanel);
+  const cpanel = el('div','cxpanel');
+  cpanel.hidden = true;
+  wrap.appendChild(cpanel);
+  let ctxData = null, ctxBuilt = false;
+  function showContext(open){
+    cpanel.hidden = !open;
+    ctoggle.setAttribute('aria-expanded', String(open));
+    if(open && ctxData && !ctxBuilt && window.NodiContext){
+      NodiContext.render(cpanel, ctxData);
+      ctxBuilt = true;
+    }
+  }
   const traceFrames = [], stageFrames = [];
   let pipe = null, ended = false, lastTimings = null, touched = false;
+  /* A refused question is answered before the pipeline proper starts, so it
+     sends no progress events and nothing would open. Blocking an attack is
+     exactly what a reader should see, so it opens the pipeline itself and
+     keeps it open when the bar is trimmed down. */
+  let refused = false;
   function ensurePipeline(){
     if(pipe || !window.NodiPipeline) return pipe;
     pipe = NodiPipeline.create(ppanel, {replay: replay,
@@ -1269,16 +1308,17 @@ function makeProcess(bubble, opts){
        top of its pipeline (see followTarget). */
     if(!replay){ if(open) liveAnchor = wrap; else if(liveAnchor === wrap) liveAnchor = null; }
   }
-  /* Steps and Pipeline are an accordion. Opening one closes the other, so the
-     two never stack into a screen-tall block under a short answer. */
+  /* Steps, Pipeline and Context are an accordion. Opening one closes the
+     others, so they never stack into a screen-tall block under a short answer. */
   function setPanel(which, byUser){
-    const wantSteps = which === 'steps', wantPipe = which === 'pipeline';
+    const wantSteps = which === 'steps', wantPipe = which === 'pipeline', wantCtx = which === 'context';
     list.hidden = !wantSteps;
     toggle.setAttribute('aria-expanded', String(wantSteps));
     showPipeline(wantPipe);
+    showContext(wantCtx);
     if(!byUser) return;
     touched = true;                      // from now on the reader decides, not autoOpen
-    if(wantPipe || wantSteps){
+    if(wantPipe || wantSteps || wantCtx){
       /* Show the panel from its FIRST line. down() would only follow the
          bottom if the view was already there, and a panel that has just grown
          below it fails that test, so it opened off-screen. The reader is now
@@ -1358,6 +1398,9 @@ function makeProcess(bubble, opts){
   setPanel(null, false);
   allProcs.push({collapse: () => setPanel(null, false)});
 
+  ctoggle.addEventListener('click', () => {
+    setPanel(ctoggle.getAttribute('aria-expanded') === 'true' ? null : 'context', true);
+  });
   ptoggle.addEventListener('click', () => {
     setPanel(ptoggle.getAttribute('aria-expanded') === 'true' ? null : 'pipeline', true);
   });
@@ -1466,7 +1509,22 @@ function makeProcess(bubble, opts){
       setPanel('pipeline', false);
       if(stick) follow(true);
     },
-    trace(frame){ traceFrames.push(frame); if(pipe) pipe.add(frame); },
+    /* The server's report of how full the context window was. */
+    context(data){
+      ctxData = data; ctxBuilt = false;
+      const pc = window.NodiContext ? NodiContext.percent(data) : null;
+      ctoggle.hidden = pc === null;
+      ctoggle.innerHTML = ICON_CONTEXT + '<span>Context <span class="n">' + (pc === null ? '' : pc + '%') + '</span></span>' + ICON_CHEV;
+      if(!cpanel.hidden) showContext(true);         // already open: show the new numbers
+    },
+    trace(frame){
+      traceFrames.push(frame);
+      if(pipe) pipe.add(frame);
+      if(frame && frame.node === 'guard' && frame.data && frame.data.refused){
+        refused = true;
+        this.autoOpen();
+      }
+    },
     /* The same progress events the step list gets: the pipeline follows them
        too, so it keeps moving even if no raw data arrives. */
     stage(payload){ stageFrames.push(payload); if(pipe) pipe.stage(payload); },
@@ -1500,8 +1558,8 @@ function makeProcess(bubble, opts){
       ended = true; if(pipe) pipe.finish();
       ring.remove(); clock.remove(); toggle.remove(); list.remove();
       wrap.classList.add('proc-done');
-      label.textContent = 'Answered instantly';
-      showPipeline(false);
+      label.textContent = refused ? 'Declined instantly' : 'Answered instantly';
+      showPipeline(refused);
     },
   };
 }
@@ -1606,11 +1664,12 @@ function applyTimings(proc, t){
 /* Rebuild the step record for an answer that finished in an earlier session.
    Returns null when the stored turn predates step recording, in which case
    the message simply has no inspector -- never a fabricated one. */
-function replayProcess(bubble, steps, timings, trace){
+function replayProcess(bubble, steps, timings, trace, context){
   const hasSteps = !!(steps && steps.length), hasTrace = !!(trace && trace.length);
   if(!hasSteps && !hasTrace) return null;
   const proc = makeProcess(bubble, {replay:true});
   (trace || []).forEach(f => { try{ proc.trace(f); }catch{} });
+  if(context){ try{ proc.context(context); }catch{} }
   /* A turn answered by a shortcut stored no steps, only its pipeline. */
   if(!hasSteps){ proc.removeIfTrivial(); return proc; }
   steps.forEach(st => { try{ applyStage(proc, bubble, st); }catch{} });
@@ -1703,6 +1762,8 @@ async function ask(question){
           text.textContent = stripCitations(answer);
           text.appendChild(el('span','caret'));
           down();
+        } else if(event === 'context'){
+          proc.context(payload);
         } else if(event === 'trace'){
           proc.trace(payload);
         } else if(event === 'stage'){
@@ -1862,7 +1923,7 @@ async function openConversation(id, title){
       /* Rebuild the step record from what was stored with the answer, so a
          reopened conversation explains itself exactly as it did when live.
          Turns saved before step recording simply have no inspector. */
-      const proc = replayProcess(bubble, t.steps, t.timings, t.trace);
+      const proc = replayProcess(bubble, t.steps, t.timings, t.trace, t.context);
       renderSources(bubble, t.citations, proc ? proc.wrap : null);
     }
   });
@@ -2042,12 +2103,19 @@ try{
 }catch{}
 
 const startersEl = $('startergrid');
-STARTERS.forEach(t => {
-  const b = el('button','starter'); b.type='button';
-  b.appendChild(el('span','st-tag', t.tag));
-  b.appendChild(el('span','st-q', t.q));
-  b.addEventListener('click', () => ask(t.q));
-  startersEl.appendChild(b);
+HOME_GROUPS.forEach(spec => {
+  const group = EXAMPLES.find(e => e.g === spec.g);
+  if(!group) return;                      // a renamed group drops out, never breaks
+  const card = el('div','scat');
+  card.appendChild(el('div','scat-name', spec.short));
+  card.appendChild(el('div','scat-why', group.why));
+  group.qs.slice(0, HOME_QUESTIONS_PER_GROUP).forEach(q => {
+    const b = el('button','scat-q', q);
+    b.type = 'button';
+    b.addEventListener('click', () => ask(q));
+    card.appendChild(b);
+  });
+  startersEl.appendChild(card);
 });
 
 fetch('health').then(r => r.json()).then(h => {
@@ -2073,6 +2141,7 @@ refreshConversations();
 </script>
 <script src="assets/architecture.js"></script>
 <script src="assets/pipeline.js"></script>
+<script src="assets/context.js"></script>
 <script src="assets/accuracy-data.js"></script>
 <script src="assets/accuracy.js"></script>
 </body>

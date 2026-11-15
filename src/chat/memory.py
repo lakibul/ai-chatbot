@@ -71,7 +71,8 @@ class Conversation:
 
     def attach_trace(self, steps: list[dict] | None,
                      timings: dict[str, Any] | None,
-                     trace: list[dict] | None = None) -> None:
+                     trace: list[dict] | None = None,
+                     context: dict | None = None) -> None:
         """Record how the last answer was produced, for the UI only.
 
         Stored beside the message exactly like `citations`, and projected
@@ -87,6 +88,9 @@ class Conversation:
         if trace:
             # Raw data for the pipeline graph, one entry per pipeline node.
             self.turns[-1]["trace"] = trace
+        if context:
+            # How full the context window was for this answer (UI only).
+            self.turns[-1]["context"] = context
 
     def window(self, turns: int | None = None) -> list[dict[str, str]]:
         """The last N TURNS, oldest first.

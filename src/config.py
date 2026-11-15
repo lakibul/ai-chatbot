@@ -161,6 +161,11 @@ COLLECTION_NAME = _env("COLLECTION_NAME", "nodi_docs")
 # anyone read what the chat itself will not say. Set TRACE_SHOW_SYSTEM_PROMPT=1
 # for a closed-door demo.
 TRACE_SHOW_SYSTEM_PROMPT = _env_flag("TRACE_SHOW_SYSTEM_PROMPT", False)
+# The per-message Context view splits the window into instructions / earlier
+# turns / passages / question using a few 1-token calls on prefixes the model
+# has already cached, so they cost almost nothing. Off = totals only.
+CONTEXT_MEASURE = _env_flag("CONTEXT_MEASURE", True)
+CONTEXT_MEASURE_SECONDS = _env_float("CONTEXT_MEASURE_SECONDS", 4.0)   # per call; on a miss, skip
 TRACE_HITS_KEPT = _env_int("TRACE_HITS_KEPT", 20)   # rows kept per ranked list
 TRACE_TEXT_CAP = _env_int("TRACE_TEXT_CAP", 800)    # chars kept per history message
 

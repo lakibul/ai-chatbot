@@ -161,9 +161,10 @@ async def ask(payload: AskRequest, request: Request) -> EventSourceResponse:
         timings: dict[str, Any] = {}
         stages: list[dict[str, Any]] = []
         traces: list[dict[str, Any]] = []
+        context_report: dict[str, Any] | None = None
         saw_done = False
 
-        generator = engine.ask(question, conversation)
+        generator = engine.ask(question, conversation, measure_context=True)
         try:
             async for kind, data in iterate_in_threadpool(generator):
                 # If the browser went away, stop pulling. Closing the
@@ -185,6 +186,8 @@ async def ask(payload: AskRequest, request: Request) -> EventSourceResponse:
                     # here rather than inside the engine so the eight yield
                     # sites stay untouched.
                     stages.append(data)
+                if kind == "context":
+                    context_report = data          # stored with the answer, like the trace
                 if kind == "trace":
                     # Raw per-node data for the pipeline graph, stored with
                     # the answer exactly like the stage frames above.
@@ -212,7 +215,7 @@ async def ask(payload: AskRequest, request: Request) -> EventSourceResponse:
                 # Persist once per completed answer, so the sidebar and the
                 # model's own memory of a conversation survive a restart
                 # together.
-                conversation.attach_trace(stages, timings, traces)
+                conversation.attach_trace(stages, timings, traces, context_report)
                 state["store"].save()
             _slot.release()
             log_request(request_id, question, outcome, timings,

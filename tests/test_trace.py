@@ -229,7 +229,7 @@ def test_index_wires_the_pipeline_in():
     html = (STATIC / "index.html").read_text(encoding="utf-8")
     assert "assets/pipeline.css" in html and "assets/pipeline.js" in html
     assert "event === 'trace'" in html and "proc.trace(payload)" in html
-    assert "replayProcess(bubble, t.steps, t.timings, t.trace)" in html
+    assert "replayProcess(bubble, t.steps, t.timings, t.trace, t.context)" in html
     assert "Pipeline</span>" in html and "plpanel" in html
     assert "Graph</span>" not in html                       # renamed
     assert not (STATIC / "graph.js").exists() and not (STATIC / "graph.css").exists()
@@ -245,7 +245,7 @@ def test_steps_and_pipeline_are_an_accordion_that_opens_at_the_first_step():
     assert "list.hidden = !wantSteps" in body and "showPipeline(wantPipe)" in body
     # opening the pipeline scrolls to ITS top and stops following the stream,
     # instead of down(), which jumped to the last steps
-    opened = body[body.index("if(wantPipe || wantSteps){"):body.index("}else{")]
+    opened = body[body.index("if(wantPipe || wantSteps || wantCtx){"):body.index("}else{")]
     opened = re.sub(r"/\*.*?\*/", "", opened, flags=re.S)       # comments may mention down()
     assert "contentTop(wrap)" in opened and "stick = false" in opened and "down()" not in opened
     # a single step's sub-steps are brought into view too, not left below the fold
@@ -289,3 +289,92 @@ def test_pipeline_opens_by_itself_for_every_answer_and_nothing_else_does():
     assert "setPanel(null, false);" in html
     # and a new question folds the earlier answers' panels away
     assert "allProcs.forEach(p => p.collapse())" in html
+
+
+# --- guardrails must be visible as guardrails -------------------------------
+
+def test_the_guardrail_steps_are_marked_as_guardrails():
+    js = (STATIC / "pipeline.js").read_text(encoding="utf-8")
+    marked = set(re.findall(r"^    (\w+): \{\n      title: '[^']*', icon: '\w+', role: \w+, safety: true",
+                            js, re.M))
+    assert marked == {"guard", "floor", "prompt"}, marked
+    assert "pl-tag-safe', 'Guardrail'" in js
+
+
+def test_the_prompt_step_reports_the_fencing_and_the_standing_rules():
+    engine = (config.ROOT / "src" / "chat" / "engine.py").read_text(encoding="utf-8")
+    assert '"fenced": documents.count("<document ")' in engine      # counted, not assumed
+    assert '"rules": active_prompt_rules()' in engine
+    js = (STATIC / "pipeline.js").read_text(encoding="utf-8")
+    assert "Standing rules in force" in js and "fenced as untrusted" in js
+
+
+def test_the_reported_rules_describe_behaviour_without_quoting_the_prompt():
+    """Plan M5: the assistant declines to reveal its instructions, so this
+    panel must not reveal them on its behalf."""
+    from src.chat.engine import PROMPT_RULES, active_prompt_rules
+    rules = active_prompt_rules()
+    assert len(rules) == len(PROMPT_RULES), "a rule marker no longer matches the prompt"
+    for label in rules:
+        assert label not in SYSTEM_PROMPT, f"this label quotes the prompt: {label!r}"
+    for marker, _ in PROMPT_RULES:
+        assert marker in SYSTEM_PROMPT, f"claimed rule is not in the prompt: {marker!r}"
+
+
+def test_a_deleted_rule_stops_being_claimed(monkeypatch):
+    """The claim is tied to the real prompt, so it cannot drift."""
+    import src.chat.engine as engine_module
+    monkeypatch.setattr(engine_module, "SYSTEM_PROMPT", "nothing in here")
+    assert engine_module.active_prompt_rules() == []
+
+
+def test_a_blocked_attack_opens_the_pipeline_by_itself():
+    """A refused question sends no progress events, so the usual trigger never
+    fires. Blocking an attack is the one thing a reader should not have to
+    hunt for."""
+    html = (STATIC / "index.html").read_text(encoding="utf-8")
+    assert "frame.node === 'guard' && frame.data && frame.data.refused" in html
+    assert "refused = true;" in html and "this.autoOpen();" in html
+    # ...and the trimmed-down bar must not close it again
+    assert "showPipeline(refused);" in html
+    assert "refused ? 'Declined instantly' : 'Answered instantly'" in html
+
+
+# --- the home screen may only suggest questions the project has evidence for -
+
+def _home_questions():
+    """The questions the home screen shows, resolved the way the page does."""
+    html = (STATIC / "index.html").read_text(encoding="utf-8")
+    per = int(re.search(r"const HOME_QUESTIONS_PER_GROUP = (\d+);", html).group(1))
+    wanted = re.findall(r"\{g:'([^']+)',\s*short:'[^']*'\}", html)
+    assert wanted, "no home categories found"
+    start = html.index("const EXAMPLES = [")
+    block = html[start:html.index(chr(10) + "];", start)]
+    groups = {}
+    for chunk in block.split("{g:'")[1:]:
+        name = chunk.split("'", 1)[0]
+        # the question strings carry no apostrophes, so a plain match is exact
+        groups[name] = re.findall("'([^']*)'", chunk.split("qs:[", 1)[1])
+    out = []
+    for name in wanted:
+        assert name in groups, f"home category not in EXAMPLES: {name!r}"
+        out.extend(groups[name][:per])
+    return out
+
+
+def test_every_home_question_is_a_real_eval_question():
+    import csv
+    import io as _io
+    rows = csv.DictReader(_io.open(config.EVAL_QUESTIONS, encoding="utf-8-sig"))
+    known = {r["question"].strip() for r in rows}
+    for q in _home_questions():
+        assert q in known, f"home screen suggests an unmeasured question: {q!r}"
+
+
+def test_the_home_screen_shows_several_categories():
+    questions = _home_questions()
+    html = (STATIC / "index.html").read_text(encoding="utf-8")
+    assert len(re.findall(r"\{g:'[^']+',\s*short:'[^']*'\}", html)) >= 4
+    assert len(questions) == len(set(questions)), "the same question appears twice"
+    # built from EXAMPLES, so the picker and the home screen cannot disagree
+    assert "EXAMPLES.find(e => e.g === spec.g)" in html

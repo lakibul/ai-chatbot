@@ -110,10 +110,14 @@
                       d.reply ? c.block('Fixed reply', d.reply) : null],
     },
     guard: {
-      title: 'Instruction-leak guard', icon: 'guard', role: null, tools: ['sanitise.py'],
-      sum: (d) => d.refused ? 'Asked for the hidden instructions: declined' : 'No attempt to extract instructions',
-      raw: (d, c) => [c.kv([['Attack patterns matched', (d.matched || []).length ? d.matched.join(', ') : 'none'],
-                            ['Declined', d.refused ? 'yes' : 'no']])],
+      title: 'Instruction-leak guard', icon: 'guard', role: null, safety: true, tools: ['sanitise.py'],
+      sum: (d) => d.refused ? 'Asked for the hidden instructions: declined'
+        : 'Checked against ' + (d.patterns || 0) + ' attack patterns, no match',
+      raw: (d, c) => [c.kv([['Attack patterns checked', d.patterns],
+                            ['Matched', (d.matched || []).length ? d.matched.join(', ') : 'none'],
+                            ['Declined', d.refused ? 'yes' : 'no']]),
+        c.note('The same patterns stripped the attack planted in the documents, but that ran once at build time ' +
+               '(see storage/sanitised.log). This check is the one that ran for this question.')],
     },
     memory: {
       title: 'Recent turns', icon: 'memory', role: null, tools: ['memory.py'],
@@ -196,18 +200,24 @@
             c.bar(x.score, 1, 4), (x.kept ? 'kept' : '') + (x.demoted ? ' (old policy, halved)' : '')]))],
     },
     floor: {
-      title: 'Is anything relevant?', icon: 'floor', role: null, tools: ['engine.py'],
+      title: 'Is anything relevant?', icon: 'floor', role: null, safety: true, tools: ['engine.py'],
       sum: (d) => !d.applies ? 'Skipped (reranker was not used)'
         : 'Best ' + num(d.top_score, 3) + ' against a floor of ' + num(d.floor, 3) + (d.passed ? ': passed' : ': below, so refuse'),
       raw: (d, c) => [c.kv([['Best passage score', d.top_score], ['Floor', d.floor], ['Ranking used', d.ranking],
                             ['Applies', d.applies ? 'yes' : 'no'], ['Passed', d.passed ? 'yes' : 'no']])],
     },
     prompt: {
-      title: 'Build the prompt', icon: 'prompt', role: null, tools: ['prompts.py'],
-      sum: (d) => plural((d.documents || []).length, 'passage') + ' + question + ' + plural(d.history_messages || 0, 'earlier message'),
+      title: 'Build the prompt', icon: 'prompt', role: null, safety: true, tools: ['prompts.py'],
+      sum: (d) => plural((d.documents || []).length, 'passage') + ' + question + ' +
+        plural(d.history_messages || 0, 'earlier message') +
+        (d.fenced ? ' \u00b7 ' + plural(d.fenced, 'passage') + ' fenced as untrusted' : ''),
       raw: (d, c) => [
+        c.kv([['Passages fenced as untrusted', d.fenced],
+              ['Marked out of date', d.superseded_marked],
+              ['Earlier messages included', d.history_messages]]),
+        (d.rules || []).length ? c.list('Standing rules in force', d.rules) : null,
         d.system_prompt ? c.block('System prompt (shown because TRACE_SHOW_SYSTEM_PROMPT is on)', d.system_prompt)
-          : c.note('The system prompt (the assistant’s instructions) is withheld, because the assistant itself refuses to reveal it.'),
+          : c.note('The instructions themselves are withheld, because the assistant refuses to reveal them. The rules above say what they enforce.'),
         c.table(['Passage', 'Section', 'Status'], (d.documents || []).map((x) => [x.id, x.section, x.status])),
         c.block('Exactly what is sent as the user message', d.user_message)],
     },
@@ -307,6 +317,14 @@
       return w;
     },
     note(text) { return h('p', 'pl-note', text); },
+    list(title, items) {
+      const w = h('div', 'pl-block');
+      w.appendChild(h('div', 'pl-bt', title));
+      const ul = h('ul', 'pl-list');
+      items.forEach((t) => ul.appendChild(h('li', null, t)));
+      w.appendChild(ul);
+      return w;
+    },
     chips(title, list) {
       const w = h('div', 'pl-block');
       w.appendChild(h('div', 'pl-bt', title));
@@ -388,13 +406,17 @@
     /* ----- top bar: legend + open all ----- */
     const top = h('div', 'pl-top');
     const legend = h('div', 'pl-legend');
-    const kModel = h('span', 'pl-key');
-    kModel.appendChild(h('span', 'pl-tag', 'MODEL'));
-    kModel.appendChild(document.createTextNode('a model runs here'));
+    /* The key names the models themselves, not just "a model runs here":
+       filled tags are the models of this pipeline, outlined tags are the
+       algorithm or library behind a step that runs no model. */
+    const legendModels = h('span', 'pl-key pl-models');
     const kTech = h('span', 'pl-key');
     kTech.appendChild(h('span', 'pl-tag pl-tag-tech', 'name'));
     kTech.appendChild(document.createTextNode('algorithm or library, no model'));
-    legend.appendChild(kModel); legend.appendChild(kTech);
+    const kSafe = h('span', 'pl-key');
+    kSafe.appendChild(h('span', 'pl-tag pl-tag-safe', 'Guardrail'));
+    kSafe.appendChild(document.createTextNode('a safety check'));
+    legend.appendChild(legendModels); legend.appendChild(kTech); legend.appendChild(kSafe);
     top.appendChild(legend);
     const openAll = h('button', 'pl-btn', 'Open all raw data');
     openAll.type = 'button';
@@ -583,6 +605,8 @@
           addTag(p, 'pl-tag', role + (name ? ' · ' + short(name) : ''), name || '');
         }
       }
+      /* A step that exists to stop something bad, not to find an answer. */
+      if (p.def.safety) addTag(p, 'pl-tag pl-tag-safe', 'Guardrail');
       const tech = typeof TECH[id] === 'function' ? TECH[id](f) : TECH[id];
       if (tech) addTag(p, 'pl-tag pl-tag-tech', tech);
     }
@@ -646,7 +670,31 @@
       }
       steps.forEach(paintStep);
       paintStages();
+      paintLegend();
       syncProgress();
+    }
+
+    /* The models of this pipeline, by name, in the order they run. A name comes
+       from the data when the step has run, else from the configured models. A
+       model that was not needed for this question is shown as such. */
+    function paintLegend() {
+      legendModels.textContent = '';
+      legendModels.appendChild(h('span', 'pl-keylabel', 'Models'));
+      ['rewrite', 'embed', 'reranker', 'llm'].forEach((role) => {
+        const id = ORDER.find((x) => NODES[x].role === role);
+        const f = frames[id];
+        const name = (f && f.model) || models()[role];
+        const label = ROLE[role];
+        if (f && f.state === 'skipped') {
+          const t = h('span', 'pl-tag pl-tag-off', label + ' · ' + (name ? short(name) : '') + ' (not used)');
+          if (name) t.title = name;
+          legendModels.appendChild(t);
+        } else {
+          const t = h('span', 'pl-tag', label + (name ? ' · ' + short(name) : ''));
+          if (name) t.title = name;
+          legendModels.appendChild(t);
+        }
+      });
     }
 
     /* The green rail: filled down to the last step that has finished. */

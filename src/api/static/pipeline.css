@@ -12,6 +12,8 @@
         flex-wrap:wrap;margin:0 0 14px;}
 .pl-legend{display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--muted);}
 .pl-key{display:inline-flex;align-items:center;gap:7px;}
+.pl-models{flex-wrap:wrap;gap:6px;}
+.pl-keylabel{color:var(--muted);margin-right:2px;}
 .pl-btn{
   background:transparent;border:1px solid var(--line);border-radius:6px;color:var(--ink-2);
   padding:3px 10px;font-size:12px;cursor:pointer;font-family:inherit;
@@ -31,6 +33,11 @@
    name rather than as "a model runs here". */
 .pl-tag.pl-tag-tech{background:transparent;color:var(--ink-2);border:1px solid var(--line);
                     font-weight:500;letter-spacing:0;}
+/* A step whose job is to stop something, not to find an answer. */
+.pl-tag.pl-tag-safe{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-line);
+                    letter-spacing:0;}
+.pl-list{margin:0;padding:0 0 0 18px;font-size:12.5px;color:var(--ink-2);line-height:1.55;}
+.pl-list li{margin:0 0 3px;}
 .pl-tags{display:flex;flex-wrap:wrap;gap:5px;margin:4px 0 0 24px;min-width:0;}
 .pl-tags:empty{display:none;}
 .pl-tags .pl-tag{max-width:100%;}
