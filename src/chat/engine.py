@@ -3,6 +3,7 @@
 Event protocol (plan M4.5, "the streaming trap"):
 
     ("stage", {...})     progress, so a wait never reads as a crash
+    ("trace", {...})     raw data of one pipeline node, for the UI's graph
     ("token", {...})     a piece of the answer
     ("error", {...})     a technical failure, mid-stream if need be
     ("done",  {...})     citations and timings -- the ONLY success signal
@@ -30,8 +31,8 @@ from .llm import LLMError, chat_stream
 from .memory import Conversation
 from ..ingest.sanitise import find_injections
 from .prompts import (NO_ANSWER_TEXT, PROMPT_EXTRACTION_REFUSAL,
-                      build_messages)
-from .rewrite import rewrite_query
+                      SYSTEM_PROMPT, build_messages)
+from .rewrite import rewrite_with_trace
 from .smalltalk import smalltalk_reply
 
 Event = tuple[str, dict[str, Any]]
@@ -52,6 +53,34 @@ class Timings:
                 "prefill_s": round(self.prefill, 2),
                 "generate_s": round(self.generate, 2),
                 "total_s": round(self.total, 2), **self.extra}
+
+
+def _node(node: str, data: dict[str, Any] | None = None, state: str = "done",
+          ms: float | None = None, model: str | None = None) -> Event:
+    """One pipeline node's raw data, as a `trace` event.
+
+    Additive by design: the UI's step list is driven by `stage` events and
+    ignores these, so deleting every _node() call changes nothing about what
+    the assistant answers. They exist so the pipeline graph can show, per
+    message, what went into and came out of each step.
+    """
+    frame: dict[str, Any] = {"node": node, "state": state, "data": data or {}}
+    if ms is not None:
+        frame["ms"] = round(ms, 1)
+    if model:
+        frame["model"] = model
+    return "trace", frame
+
+
+def _history_view(history: list[dict[str, str]]) -> list[dict[str, str]]:
+    """The remembered turns as shown in the graph, each capped in length."""
+    cap = config.TRACE_TEXT_CAP
+    out = []
+    for message in history:
+        text = message.get("content", "")
+        out.append({"role": message.get("role", ""),
+                    "content": text if len(text) <= cap else text[:cap] + "..."})
+    return out
 
 
 def display_title(raw_title: str, doc_id: str) -> str:
@@ -135,6 +164,7 @@ class ChatEngine:
             yield "error", {"code": "empty_question",
                             "message": "Please type a question."}
             return
+        original_len = len(question)
         if len(question) > config.MAX_INPUT_CHARS:
             # An unbounded paste would blow num_ctx and push the real
             # documents out of the prompt (plan M4.5, input validation).
@@ -142,13 +172,22 @@ class ChatEngine:
             yield "stage", {"stage": "truncated",
                             "message": f"Question truncated to "
                                        f"{config.MAX_INPUT_CHARS} characters."}
+        yield _node("input", {
+            "question": question, "chars": len(question),
+            "original_chars": original_len,
+            "truncated": original_len > len(question),
+            "limit": config.MAX_INPUT_CHARS})
 
         # --- conversational fast path -------------------------------------
         # Measured: "hello" cost 27.6s, of which 21.3s was the model reading
         # five retrieved policy chunks it had no use for. Answered here, it
         # costs nothing. Only fires when the WHOLE message is a pleasantry.
         canned = smalltalk_reply(question)
+        yield _node("smalltalk", {"matched": canned is not None,
+                                  "reply": canned})
         if canned is not None:
+            yield _node("outcome", {"kind": "smalltalk",
+                                    "text": "Answered with a fixed reply. No search, no model."})
             yield "token", {"text": canned}
             if conversation is not None:
                 conversation.add_user(question, ts=started)
@@ -164,7 +203,12 @@ class ChatEngine:
         # before the LLM: the model cannot leak what it is never asked, and
         # the refusal costs no prefill. This is a refusal, not a failure, so
         # it travels as tokens and ends with a proper done frame.
-        if find_injections(question):
+        strips = find_injections(question)
+        yield _node("guard", {"matched": [x.pattern for x in strips][:5],
+                              "refused": bool(strips)})
+        if strips:
+            yield _node("outcome", {"kind": "refused",
+                                    "text": "Declined before any search or model call."})
             yield "token", {"text": PROMPT_EXTRACTION_REFUSAL}
             yield "done", {"citations": [], "timings": timings.as_dict(),
                            "reason": "prompt_extraction_refused"}
@@ -172,9 +216,23 @@ class ChatEngine:
 
         # --- rewrite ------------------------------------------------------
         yield "stage", {"stage": "rewriting"}
+        yield _node("memory", {
+            "turns": sum(1 for m in history if m.get("role") == "user"),
+            "limit": config.HISTORY_TURNS,
+            "messages": _history_view(history)},
+            state="done" if history else "skipped")
         mark = time.time()
-        search_query, was_rewritten = rewrite_query(question, history)
+        search_query, was_rewritten, rewrite_trace = rewrite_with_trace(
+            question, history)
         timings.rewrite = time.time() - mark
+        rewrite_skipped = bool(rewrite_trace.get("skipped"))
+        yield _node("rewrite", {**rewrite_trace, "question": question,
+                                "search_query": search_query,
+                                "changed": was_rewritten},
+                    state="skipped" if rewrite_skipped else "done",
+                    # No model ran on a first question, so no model and no time.
+                    ms=None if rewrite_skipped else timings.rewrite * 1000,
+                    model=None if rewrite_skipped else rewrite_trace.get("model"))
         if was_rewritten:
             yield "stage", {"stage": "rewritten", "query": search_query}
 
@@ -184,6 +242,8 @@ class ChatEngine:
         try:
             result = self.retriever.retrieve(search_query)
         except Exception as exc:                  # noqa: BLE001
+            yield _node("error", {"where": "search", "message": str(exc)},
+                        state="error")
             yield "error", {"code": "retrieval_failed",
                             "message": f"Search failed: {exc}"}
             return
@@ -212,17 +272,48 @@ class ChatEngine:
         for note in result.degraded:
             yield "stage", {"stage": "degraded", "message": note}
 
+        # Raw data of each search sub-step, for the pipeline graph.
+        retriever = self.retriever
+        for node, ms_key, model_name in (
+                ("bm25", "bm25_ms", None),
+                ("vector", "vector_ms", getattr(retriever, "embed_model", None)),
+                ("fuse", "fuse_ms", None),
+                ("boost", None, None),
+                ("window", None, None),
+                ("rerank", "rerank_ms", getattr(retriever, "reranker_model", None))):
+            if node not in result.trace:
+                continue
+            data = result.trace[node]
+            skipped = (node == "boost" and not data.get("matched")) or \
+                      (node == "rerank" and not data.get("available", True))
+            yield _node(node, data, state="skipped" if skipped else "done",
+                        ms=result.stages.get(ms_key) if ms_key else None,
+                        model=model_name if not skipped else None)
+
         if not result.hits:
             # Nothing found at all. A DISTINCT string from the refusal, so the
             # eval can tell "retrieval returned nothing" from "the documents
             # do not cover this" (plan M4.5).
+            yield _node("outcome", {"kind": "no_results",
+                                    "text": "Search returned nothing at all."})
             yield "token", {"text": "I could not find anything in the Nodi Tech "
                                     "documents for that question."}
             yield "done", {"citations": [], "timings": timings.as_dict(),
                            "reason": "no_results"}
             return
 
-        if self._below_floor(result):
+        below = self._below_floor(result)
+        yield _node("floor", {
+            "top_score": round(result.top_score, 4),
+            "floor": config.RELEVANCE_FLOOR,
+            "ranking": result.stages.get("ranking", ""),
+            "applies": result.stages.get("ranking") == "rerank",
+            "passed": not below})
+        if below:
+            yield _node("outcome", {"kind": "below_floor",
+                                    "text": "Best passage scored under the floor, so the "
+                                            "assistant says it is not in the documents. "
+                                            "No model call."})
             yield "token", {"text": NO_ANSWER_TEXT}
             yield "done", {"citations": [], "timings": timings.as_dict(),
                            "reason": "below_relevance_floor",
@@ -242,6 +333,17 @@ class ChatEngine:
 
         # --- generate -----------------------------------------------------
         messages = build_messages(question, result.hits, history)
+        prompt_data: dict[str, Any] = {
+            "user_message": messages[-1]["content"],
+            "documents": [{"id": h.doc_id, "section": h.section,
+                           "status": h.status} for h in result.hits],
+            "history_messages": len(history),
+        }
+        if config.TRACE_SHOW_SYSTEM_PROMPT:
+            prompt_data["system_prompt"] = SYSTEM_PROMPT
+        else:
+            prompt_data["system_prompt_withheld"] = True
+        yield _node("prompt", prompt_data)
         yield "stage", {"stage": "writing", "model": model or self.model}
 
         mark = time.time()
@@ -261,10 +363,14 @@ class ChatEngine:
         except LLMError as exc:
             # Mid-stream failure. It is far too late for an HTTP 500, so the
             # protocol carries its own error frame (plan M4.5).
+            yield _node("error", {"where": "llm", "message": str(exc)},
+                        state="error")
             yield "error", {"code": getattr(exc, "code", "llm_error"),
                             "message": str(exc)}
             return
         except Exception as exc:                  # noqa: BLE001
+            yield _node("error", {"where": "llm", "message": str(exc)},
+                        state="error")
             yield "error", {"code": "unexpected", "message": str(exc)}
             return
 
@@ -297,10 +403,38 @@ class ChatEngine:
                             "message": "The model returned an empty answer."}
             return
 
-        citations = used_citations(answer, citations_from(result.hits))
+        retrieved = citations_from(result.hits)
+        citations = used_citations(answer, retrieved)
+
+        used_model = model or self.model
+        prefill_s = timings.prefill
+        generate_s = timings.generate
+        yield _node("llm", {
+            "options": config.ollama_options(config.ANSWER_MAX_TOKENS),
+            "prompt_tokens": metrics.get("prompt_tokens", 0),
+            "output_tokens": metrics.get("output_tokens", 0),
+            "prefill_s": round(prefill_s, 2),
+            "generate_s": round(generate_s, 2),
+            "read_tokens_per_s": round(metrics.get("prompt_tokens", 0) / prefill_s, 1)
+                                  if prefill_s else None,
+            "write_tokens_per_s": round(metrics.get("output_tokens", 0) / generate_s, 1)
+                                   if generate_s else None,
+            "load_s": round(float(metrics.get("load_seconds", 0.0) or 0.0), 2),
+            "answer_raw": answer},
+            ms=stream_seconds * 1000, model=used_model)
+        yield _node("cite", {
+            "named_in_answer": sorted({m.group(1).strip() for m in _CITE_MARKER.finditer(answer)}),
+            "retrieved": [c["title"] for c in retrieved],
+            "shown": [c["title"] for c in citations],
+            "fallback_all": len(citations) == len(retrieved) and
+                            not _CITE_MARKER.search(answer)})
+
         if conversation is not None:
             conversation.add_user(question, ts=started)
             conversation.add_assistant(answer, citations)
+        yield _node("save", {"saved": conversation is not None})
+        yield _node("outcome", {"kind": "answered",
+                                "text": "Answer streamed to the browser."})
 
         yield "done", {"citations": citations,
                        "timings": timings.as_dict(),
@@ -320,6 +454,7 @@ class ChatEngine:
         timings: dict[str, Any] = {}
         error: dict[str, Any] | None = None
         stages: list[dict[str, Any]] = []
+        trace: list[dict[str, Any]] = []
         done = False
 
         for kind, payload in self.ask(question, conversation, model=model):
@@ -327,6 +462,8 @@ class ChatEngine:
                 parts.append(payload["text"])
             elif kind == "stage":
                 stages.append(payload)
+            elif kind == "trace":
+                trace.append(payload)
             elif kind == "error":
                 error = payload
             elif kind == "done":
@@ -340,4 +477,5 @@ class ChatEngine:
                      "message": "The answer stream ended without completing."}
 
         return {"answer": "".join(parts).strip(), "citations": citations,
-                "timings": timings, "error": error, "stages": stages}
+                "timings": timings, "error": error, "stages": stages,
+                "trace": trace}

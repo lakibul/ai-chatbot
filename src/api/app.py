@@ -160,6 +160,7 @@ async def ask(payload: AskRequest, request: Request) -> EventSourceResponse:
         outcome = "incomplete"
         timings: dict[str, Any] = {}
         stages: list[dict[str, Any]] = []
+        traces: list[dict[str, Any]] = []
         saw_done = False
 
         generator = engine.ask(question, conversation)
@@ -184,6 +185,10 @@ async def ask(payload: AskRequest, request: Request) -> EventSourceResponse:
                     # here rather than inside the engine so the eight yield
                     # sites stay untouched.
                     stages.append(data)
+                if kind == "trace":
+                    # Raw per-node data for the pipeline graph, stored with
+                    # the answer exactly like the stage frames above.
+                    traces.append(data)
                 if kind == "done":
                     saw_done = True
                     outcome = "ok"
@@ -207,7 +212,7 @@ async def ask(payload: AskRequest, request: Request) -> EventSourceResponse:
                 # Persist once per completed answer, so the sidebar and the
                 # model's own memory of a conversation survive a restart
                 # together.
-                conversation.attach_trace(stages, timings)
+                conversation.attach_trace(stages, timings, traces)
                 state["store"].save()
             _slot.release()
             log_request(request_id, question, outcome, timings,

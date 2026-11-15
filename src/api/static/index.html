@@ -577,6 +577,7 @@
     .frow{grid-template-columns:1fr;}
   }
 </style>
+<link rel="stylesheet" href="assets/pipeline.css">
 </head>
 <body>
 <div class="app">
@@ -752,6 +753,10 @@ let parkNode = null;      // the question element being parked
 let parkGap = PARK_MIN;   // screen-space distance from the top to that question
 let lastSelfScroll = 0;   // when WE last moved the scroller
 let glideUntil = 0;       // a smooth scroll is in flight until this moment
+/* The answer's .proc block, while its pipeline is open. Following the
+   stream must not run on to the BOTTOM of a tall pipeline, which would hide
+   its first steps; it stops just inside the top of it instead. */
+let liveAnchor = null;
 const GLIDE_MS = 420;
 
 /* Honoured, not assumed: a reader who has asked the system for less motion
@@ -809,7 +814,20 @@ function follow(smooth){
   /* While the pad has height this lands exactly on `parkTop - parkGap`, so
      the question holds still at the centre; after the pad is used up it is
      simply the bottom of the thread. One expression covers both. */
-  setScrollTop(scroll.scrollHeight - scroll.clientHeight, smooth);
+  setScrollTop(followTarget(), smooth);
+}
+
+/* Where following the stream should land. Normally the bottom of the thread.
+   With a pipeline open it is capped so the bottom edge of the view sits
+   about 170px into the pipeline (its bar, stage strip and first step), but
+   never above the parked question. A long answer is still followed. */
+function followTarget(){
+  let target = scroll.scrollHeight - scroll.clientHeight;
+  if(liveAnchor && liveAnchor.isConnected){
+    const floor = parkTop >= 0 ? parkTop - parkGap : 0;
+    target = Math.min(target, Math.max(floor, contentTop(liveAnchor) + 170 - scroll.clientHeight));
+  }
+  return target;
 }
 
 function park(node){
@@ -821,7 +839,7 @@ function park(node){
 }
 
 function releasePad(){
-  parkTop = -1; parkNode = null; parkGap = PARK_MIN; stick = false;
+  parkTop = -1; parkNode = null; parkGap = PARK_MIN; stick = false; liveAnchor = null;
   if(tailpad) tailpad.style.height = '0px';
 }
 
@@ -845,6 +863,7 @@ const ICON_TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
 const ICON_STEPS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg>';
 const ICON_DOC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>';
 const ICON_BULB = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.5.4.8 1 .9 1.6l.1.6h5.2l.1-.6c.1-.6.4-1.2.9-1.6A6 6 0 0 0 12 3z"/></svg>';
+const ICON_PIPELINE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="7" height="5" rx="1.2"/><rect x="14" y="15" width="7" height="5" rx="1.2"/><path d="M6.5 9v3a3 3 0 0 0 3 3H14"/></svg>';
 const ICON_CHEV_S = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
 const ICON_CHEV = '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
 
@@ -1109,6 +1128,12 @@ const SUBTOTAL = STEPS.reduce((n,s) => n + s.subs.length, 0);
    reloads, so "show me the steps" only has to be asked once. */
 let stepsOpen = false;
 try{ stepsOpen = localStorage.getItem('nodi-steps') === 'open'; }catch{}
+/* The pipeline is open by default while an answer is being produced, because
+   watching it work is the point; a reopened conversation starts with every
+   pipeline closed so a long thread does not become a wall of diagrams. Steps
+   and Pipeline are an accordion: only one of the two is open at a time. */
+let pipelineOpenLive = true;
+try{ pipelineOpenLive = localStorage.getItem('nodi-pipeline') !== 'closed'; }catch{}
 
 function fmtMs(ms){
   if(ms === undefined || ms === null || isNaN(ms)) return '';
@@ -1135,8 +1160,59 @@ function makeProcess(bubble, opts){
   toggle.innerHTML = ICON_STEPS + '<span>Steps</span>' + ICON_CHEV;
   if(!replay) bar.appendChild(ring);
   bar.appendChild(label); bar.appendChild(clock);
-  bar.appendChild(el('span','grow')); bar.appendChild(toggle);
+  const ptoggle = el('button','proc-toggle');
+  ptoggle.type = 'button';
+  ptoggle.innerHTML = ICON_PIPELINE + '<span>Pipeline</span>' + ICON_CHEV;
+  bar.appendChild(el('span','grow')); bar.appendChild(ptoggle); bar.appendChild(toggle);
   wrap.appendChild(bar);
+
+  /* The pipeline: the same answer drawn as a flow, with the raw data of each
+     step. Built at once while live; on a replay only when first opened. */
+  const ppanel = el('div','plpanel');
+  wrap.appendChild(ppanel);
+  const traceFrames = [], stageFrames = [];
+  let pipe = null, ended = false, lastTimings = null;
+  function ensurePipeline(){
+    if(pipe || !window.NodiPipeline) return pipe;
+    pipe = NodiPipeline.create(ppanel, {replay: replay,
+                                         models: () => (health && health.models) || {}});
+    traceFrames.forEach(f => pipe.add(f));
+    stageFrames.forEach(p => pipe.stage(p));
+    if(lastTimings) pipe.timings(lastTimings);
+    if(ended) pipe.finish(); else if(!replay) pipe.start();
+    return pipe;
+  }
+  function showPipeline(open){
+    ppanel.hidden = !open;
+    ptoggle.setAttribute('aria-expanded', String(open));
+    if(open){ ensurePipeline(); if(pipe) pipe.relayout(); }
+    /* While this answer is live, following the stream is anchored to the
+       top of its pipeline (see followTarget). */
+    if(!replay){ if(open) liveAnchor = wrap; else if(liveAnchor === wrap) liveAnchor = null; }
+  }
+  /* Steps and Pipeline are an accordion. Opening one closes the other, so the
+     two never stack into a screen-tall block under a short answer. */
+  function setPanel(which, byUser){
+    const wantSteps = which === 'steps', wantPipe = which === 'pipeline';
+    list.hidden = !wantSteps;
+    toggle.setAttribute('aria-expanded', String(wantSteps));
+    showPipeline(wantPipe);
+    if(!byUser) return;
+    stepsOpen = wantSteps;
+    try{
+      localStorage.setItem('nodi-steps', wantSteps ? 'open' : 'closed');
+      localStorage.setItem('nodi-pipeline', wantPipe ? 'open' : 'closed');
+    }catch{}
+    if(wantPipe){
+      /* Show it from its FIRST step. down() would jump to the bottom of the
+         thread, which lands on the last steps; and the reader is now
+         inspecting, so stop following the stream. */
+      stick = false;
+      setScrollTop(Math.max(0, contentTop(wrap) - 14), true);
+    }else{
+      down();
+    }
+  }
 
   const list = el('ol','steps');
   list.hidden = !stepsOpen;
@@ -1203,14 +1279,13 @@ function makeProcess(bubble, opts){
   });
   wrap.appendChild(list);
   bubble.appendChild(wrap);
+  setPanel(stepsOpen ? 'steps' : (replay ? null : (pipelineOpenLive ? 'pipeline' : null)), false);
 
+  ptoggle.addEventListener('click', () => {
+    setPanel(ptoggle.getAttribute('aria-expanded') === 'true' ? null : 'pipeline', true);
+  });
   toggle.addEventListener('click', () => {
-    const open = toggle.getAttribute('aria-expanded') === 'true';
-    toggle.setAttribute('aria-expanded', String(!open));
-    list.hidden = open;
-    stepsOpen = !open;
-    try{ localStorage.setItem('nodi-steps', stepsOpen ? 'open' : 'closed'); }catch{}
-    down();
+    setPanel(toggle.getAttribute('aria-expanded') === 'true' ? null : 'steps', true);
   });
 
   const t0 = performance.now();
@@ -1304,7 +1379,14 @@ function makeProcess(bubble, opts){
     skipRest(){
       rows.forEach((r,i) => { if(i > current && !r.started) r.li.remove(); });
     },
+    /* One raw-data event for the pipeline. Held until it exists. */
+    trace(frame){ traceFrames.push(frame); if(pipe) pipe.add(frame); },
+    /* The same progress events the step list gets: the pipeline follows them
+       too, so it keeps moving even if no raw data arrives. */
+    stage(payload){ stageFrames.push(payload); if(pipe) pipe.stage(payload); },
+    timings(t){ lastTimings = t; if(pipe) pipe.timings(t); },
     complete(totalSeconds){
+      ended = true; if(pipe) pipe.finish();
       clearInterval(timer);
       for(let n = 0; n <= current; n++) finish(n);
       rows.forEach(r => { if(!r.started) r.li.classList.add('pending'); });
@@ -1319,9 +1401,22 @@ function makeProcess(bubble, opts){
       label.textContent = totalSeconds !== undefined && totalSeconds !== null
         ? 'Answered in ' + Math.round(totalSeconds) + ' seconds' : 'Finished';
     },
-    fail(){ clearInterval(timer); ring.remove(); wrap.classList.add('proc-done');
+    fail(){ ended = true; if(pipe) pipe.finish();
+            clearInterval(timer); ring.remove(); wrap.classList.add('proc-done');
             label.textContent = 'Stopped'; },
-    removeIfTrivial(){ clearInterval(timer); wrap.remove(); },
+    /* An instant canned reply has no step list worth showing, but its pipeline
+       is still the honest record (which shortcut fired, and that no model or
+       search ran), so only the step list is dropped and the pipeline is kept
+       closed. With no raw data at all, the whole bar goes as before. */
+    removeIfTrivial(){
+      clearInterval(timer);
+      if(!traceFrames.length){ wrap.remove(); return; }
+      ended = true; if(pipe) pipe.finish();
+      ring.remove(); clock.remove(); toggle.remove(); list.remove();
+      wrap.classList.add('proc-done');
+      label.textContent = 'Answered instantly';
+      showPipeline(false);
+    },
   };
 }
 
@@ -1329,6 +1424,7 @@ function makeProcess(bubble, opts){
 /* Shared by the live stream and by a replay of a stored answer, so an old
    conversation shows exactly what it showed when it was new. */
 function applyStage(proc, bubble, payload){
+  proc.stage(payload);
   const s = payload.stage;
   if(s === 'rewriting'){
     proc.enter('rewriting');
@@ -1402,6 +1498,7 @@ function applyStage(proc, bubble, payload){
 /* The server's own measurements: it can separate reading from writing
    exactly, which the browser cannot. */
 function applyTimings(proc, t){
+  proc.timings(t);
   const bits = [];
   if(t.prompt_tokens) bits.push(t.prompt_tokens + ' tokens read');
   if(t.output_tokens) bits.push(t.output_tokens + ' written');
@@ -1423,9 +1520,13 @@ function applyTimings(proc, t){
 /* Rebuild the step record for an answer that finished in an earlier session.
    Returns null when the stored turn predates step recording, in which case
    the message simply has no inspector -- never a fabricated one. */
-function replayProcess(bubble, steps, timings){
-  if(!steps || !steps.length) return null;
+function replayProcess(bubble, steps, timings, trace){
+  const hasSteps = !!(steps && steps.length), hasTrace = !!(trace && trace.length);
+  if(!hasSteps && !hasTrace) return null;
   const proc = makeProcess(bubble, {replay:true});
+  (trace || []).forEach(f => { try{ proc.trace(f); }catch{} });
+  /* A turn answered by a shortcut stored no steps, only its pipeline. */
+  if(!hasSteps){ proc.removeIfTrivial(); return proc; }
   steps.forEach(st => { try{ applyStage(proc, bubble, st); }catch{} });
   const t = timings || {};
   applyTimings(proc, t);
@@ -1457,6 +1558,7 @@ async function ask(question){
   question = (question||'').trim();
   if(busy || !question) return;
   busy = true; setSending(true);
+  liveAnchor = null;           // the previous answer's pipeline must not steer this one
 
   const userTurn = addTurn(true, undefined, true);
   userTurn.text.textContent = question;
@@ -1513,6 +1615,8 @@ async function ask(question){
           text.textContent = stripCitations(answer);
           text.appendChild(el('span','caret'));
           down();
+        } else if(event === 'trace'){
+          proc.trace(payload);
         } else if(event === 'stage'){
           sawStage = true;
           applyStage(proc, bubble, payload);
@@ -1668,7 +1772,7 @@ async function openConversation(id, title){
       /* Rebuild the step record from what was stored with the answer, so a
          reopened conversation explains itself exactly as it did when live.
          Turns saved before step recording simply have no inspector. */
-      const proc = replayProcess(bubble, t.steps, t.timings);
+      const proc = replayProcess(bubble, t.steps, t.timings, t.trace);
       renderSources(bubble, t.citations, proc ? proc.wrap : null);
     }
   });
@@ -1875,6 +1979,7 @@ setSending(false);
 refreshConversations();
 </script>
 <script src="assets/architecture.js"></script>
+<script src="assets/pipeline.js"></script>
 <script src="assets/accuracy-data.js"></script>
 <script src="assets/accuracy.js"></script>
 </body>

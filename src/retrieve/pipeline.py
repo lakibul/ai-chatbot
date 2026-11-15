@@ -29,7 +29,7 @@ from qdrant_client import QdrantClient
 
 from .. import config
 from ..index.embed import EmbeddingError
-from ..index.lexical import BM25Index
+from ..index.lexical import BM25Index, extract_codes, tokenize
 from ..index.types import Hit
 from ..index.vector import search as vector_search
 from .code_boost import apply_code_boost
@@ -42,6 +42,10 @@ class RetrievalResult:
     hits: list[Hit]
     degraded: list[str] = field(default_factory=list)
     stages: dict[str, Any] = field(default_factory=dict)
+    # Raw data for the UI's per-message pipeline graph. Purely additive: it is
+    # filled from values already computed, and removing every line that
+    # touches it leaves the hits, their order and their scores unchanged.
+    trace: dict[str, Any] = field(default_factory=dict)
 
     @property
     def is_degraded(self) -> bool:
@@ -50,6 +54,14 @@ class RetrievalResult:
     @property
     def top_score(self) -> float:
         return self.hits[0].score if self.hits else 0.0
+
+
+def _compact(hit: Hit, **extra: Any) -> dict[str, Any]:
+    """One row of a ranked list, small enough to store with every answer."""
+    row: dict[str, Any] = {"id": hit.chunk_id, "doc": hit.doc_id,
+                           "section": hit.section, "score": round(hit.score, 4)}
+    row.update(extra)
+    return row
 
 
 class Retriever:
@@ -83,7 +95,8 @@ class Retriever:
         try:
             return vector_search(query, top_k=config.VECTOR_TOP_K,
                                  model=self.embed_model,
-                                 collection=self.collection, client=self.client)
+                                 collection=self.collection, client=self.client,
+                                 trace=result.trace.setdefault("vector_query", {}))
         except EmbeddingError as exc:
             result.degraded.append(f"embeddings unavailable, BM25 only ({exc})")
             return []
@@ -152,6 +165,16 @@ class Retriever:
         result.stages["bm25_count"] = len(lexical_hits)
         result.stages["vector_count"] = len(vector_hits)
 
+        kept = config.TRACE_HITS_KEPT
+        result.trace["bm25"] = {
+            "query_tokens": tokenize(query)[:60],
+            "hits": [_compact(h) for h in lexical_hits[:kept]],
+        }
+        result.trace["vector"] = {
+            **result.trace.pop("vector_query", {}),
+            "hits": [_compact(h) for h in vector_hits[:kept]],
+        }
+
         if not lexical_hits and not vector_hits:
             # Genuinely nothing found. Distinct from a refusal and from a
             # failure -- the caller must keep all three apart (plan M4.5).
@@ -160,6 +183,13 @@ class Retriever:
 
         mark = time.perf_counter()
         fused = reciprocal_rank_fusion([lexical_hits, vector_hits])
+        # Captured BEFORE the boost, which edits these same objects in place.
+        result.trace["fuse"] = {
+            "k": config.RRF_K,
+            "unique": len(fused),
+            "hits": [_compact(h, ranks=dict(h.debug.get("sources", {})))
+                     for h in fused[:kept]],
+        }
         boosted = apply_code_boost(query, fused)
         candidates = self._select_candidates(boosted, lexical_hits, vector_hits)
         result.stages["fuse_ms"] = round((time.perf_counter() - mark) * 1000, 1)
@@ -169,6 +199,32 @@ class Retriever:
         result.stages["code_boosted"] = sum(
             1 for hit in boosted if hit.debug.get("code_boost"))
         result.stages["candidates"] = len(candidates)
+
+        result.trace["boost"] = {
+            "codes_in_question": extract_codes(query),
+            "boost": config.CODE_BOOST,
+            "matched": [_compact(h, matched=h.debug.get("code_boost"))
+                        for h in boosted if h.debug.get("code_boost")],
+        }
+        # Why each passage earned a seat in the rerank window. Derived from the
+        # same lists _select_candidates used; it does not influence the choice.
+        guaranteed = config.GUARANTEED_PER_RETRIEVER
+        top_vector = {h.chunk_id for h in vector_hits[:guaranteed]}
+        top_lexical = {h.chunk_id for h in lexical_hits[:guaranteed]}
+
+        def _why(hit: Hit) -> str:
+            if hit.debug.get("code_boost"):
+                return "exact identifier"
+            if hit.chunk_id in top_vector:
+                return "top meaning match"
+            if hit.chunk_id in top_lexical:
+                return "top keyword match"
+            return "fusion rank"
+        result.trace["window"] = {
+            "limit": config.RERANK_CANDIDATES,
+            "reserved_per_search": guaranteed,
+            "candidates": [_compact(h, why=_why(h)) for h in candidates],
+        }
 
         if not self.use_reranker:
             result.hits = candidates[:top_k]
@@ -181,10 +237,24 @@ class Retriever:
                                  model=self.reranker_model)
             result.stages["rerank_ms"] = round((time.perf_counter() - mark) * 1000, 1)
             result.stages["ranking"] = "rerank"
+            final_ids = {h.chunk_id for h in result.hits}
+            result.trace["rerank"] = {
+                "available": True,
+                "superseded_multiplier": config.SUPERSEDED_MULTIPLIER,
+                "candidates": sorted((
+                    {"id": h.chunk_id, "doc": h.doc_id, "section": h.section,
+                     "logit": round(h.debug.get("rerank_logit", 0.0), 3),
+                     "probability": round(h.debug.get("rerank_score", 0.0), 4),
+                     "score": round(h.score, 4),
+                     "demoted": bool(h.debug.get("superseded_demoted")),
+                     "kept": h.chunk_id in final_ids}
+                    for h in candidates), key=lambda r: r["score"], reverse=True),
+            }
         except RerankerUnavailable as exc:
             result.degraded.append(f"reranker unavailable, using fusion order ({exc})")
             result.hits = candidates[:top_k]
             result.stages["ranking"] = "rrf"
+            result.trace["rerank"] = {"available": False, "reason": str(exc)}
         return result
 
     def close(self) -> None:

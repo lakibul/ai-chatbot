@@ -36,6 +36,10 @@ def _env_float(name: str, default: float) -> float:
         return default
 
 
+def _env_flag(name: str, default: bool = False) -> bool:
+    return _env(name, "1" if default else "0").lower() in ("1", "true", "yes", "on")
+
+
 # ---------------------------------------------------------------- paths ----
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "rag_chatbot_kit" / "data"
@@ -151,6 +155,15 @@ COLLECTION_NAME = _env("COLLECTION_NAME", "nodi_docs")
 # is up to 12 messages. Brief M4: "the last 6 turns are kept". Each extra old
 # turn is more text the model must read (~40 tokens, ~1.7 s at the measured
 # 23.9 tok/s prefill) -- only chats longer than 3 questions pay it.
+# The per-message pipeline graph (UI) records raw data for every step. The two
+# system prompts are WITHHELD from it by default: the assistant refuses to
+# reveal its instructions (plan M5), and a UI panel that printed them would let
+# anyone read what the chat itself will not say. Set TRACE_SHOW_SYSTEM_PROMPT=1
+# for a closed-door demo.
+TRACE_SHOW_SYSTEM_PROMPT = _env_flag("TRACE_SHOW_SYSTEM_PROMPT", False)
+TRACE_HITS_KEPT = _env_int("TRACE_HITS_KEPT", 20)   # rows kept per ranked list
+TRACE_TEXT_CAP = _env_int("TRACE_TEXT_CAP", 800)    # chars kept per history message
+
 HISTORY_TURNS = _env_int("HISTORY_TURNS", 6)
 MAX_INPUT_CHARS = _env_int("MAX_INPUT_CHARS", 2000)
 REWRITE_MAX_TOKENS = _env_int("REWRITE_MAX_TOKENS", 40)

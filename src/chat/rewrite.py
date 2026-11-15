@@ -15,7 +15,7 @@ import re
 
 from .. import config
 from .llm import LLMError, chat
-from .prompts import build_rewrite_messages
+from .prompts import REWRITE_SYSTEM_PROMPT, build_rewrite_messages
 
 # The small model sometimes decorates its answer despite being told not to.
 _PREFIXES = re.compile(
@@ -43,6 +43,41 @@ def _clean(text: str, fallback: str) -> str:
     return candidate
 
 
+def rewrite_with_trace(question: str, history: list[dict[str, str]] | None = None,
+                       model: str | None = None) -> tuple[str, bool, dict]:
+    """rewrite_query plus the raw data behind it, for the UI's pipeline graph.
+
+    Same behaviour exactly: the third value is only a record of what happened.
+    """
+    model = model or config.REWRITE_MODEL
+    trace: dict = {"model": model, "skipped": not history}
+    if config.TRACE_SHOW_SYSTEM_PROMPT:
+        trace["system_prompt"] = REWRITE_SYSTEM_PROMPT
+    if not history:
+        trace["reason"] = "no earlier turns, so there is nothing to resolve"
+        return question, False, trace
+
+    messages = build_rewrite_messages(question, history)
+    trace["input"] = messages[-1]["content"]
+    try:
+        result = chat(messages, model=model,
+                      num_predict=config.REWRITE_MAX_TOKENS,
+                      timeout=config.REWRITE_TIMEOUT)
+    except LLMError as exc:
+        trace["error"] = str(exc)
+        return question, False, trace          # silent, safe (plan M4.5)
+
+    rewritten = _clean(result.text, question)
+    trace.update({
+        "raw_output": result.text,
+        "query": rewritten,
+        "prompt_tokens": result.prompt_tokens,
+        "output_tokens": result.output_tokens,
+        "seconds": round(result.total_seconds, 2),
+    })
+    return rewritten, rewritten != question, trace
+
+
 def rewrite_query(question: str, history: list[dict[str, str]] | None = None,
                   model: str | None = None) -> tuple[str, bool]:
     """Return (query, was_rewritten).
@@ -50,17 +85,5 @@ def rewrite_query(question: str, history: list[dict[str, str]] | None = None,
     With no history there is nothing to resolve, so the question is returned
     untouched and no LLM call is made at all.
     """
-    if not history:
-        return question, False
-
-    messages = build_rewrite_messages(question, history)
-    try:
-        result = chat(messages,
-                      model=model or config.REWRITE_MODEL,
-                      num_predict=config.REWRITE_MAX_TOKENS,
-                      timeout=config.REWRITE_TIMEOUT)
-    except LLMError:
-        return question, False          # silent, safe (plan M4.5)
-
-    rewritten = _clean(result.text, question)
-    return rewritten, rewritten != question
+    query, was_rewritten, _trace = rewrite_with_trace(question, history, model)
+    return query, was_rewritten

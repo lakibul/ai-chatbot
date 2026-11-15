@@ -77,11 +77,20 @@ def build_vector_index(chunks: list[Chunk], model: str | None = None,
 
 
 def search(query: str, top_k: int | None = None, model: str | None = None,
-           collection: str | None = None, client: QdrantClient | None = None) -> list[Hit]:
-    """Embed the query and return the nearest chunks."""
+           collection: str | None = None, client: QdrantClient | None = None,
+           trace: dict[str, Any] | None = None) -> list[Hit]:
+    """Embed the query and return the nearest chunks.
+
+    `trace`, if given, is filled with the shape of the query vector for the
+    UI's raw-data view. It only READS the vector that was already computed.
+    """
     top_k = top_k or config.VECTOR_TOP_K
     collection = collection or config.COLLECTION_NAME
     vector = embed([query], model=model)[0]
+    if trace is not None:
+        trace["dimension"] = len(vector)
+        trace["preview"] = [round(float(x), 4) for x in vector[:8]]
+        trace["norm"] = round(sum(float(x) * float(x) for x in vector) ** 0.5, 4)
 
     def _run(c: QdrantClient) -> list[Hit]:
         found = c.query_points(

@@ -281,3 +281,16 @@ def test_code_boosted_chunk_is_never_dropped_from_the_window(retriever):
     result = retriever.retrieve("What does error ND-4000 mean?", top_k=5)
     assert result.hits[0].doc_id == "nodidesk_error_codes.md"
     assert "ND-4000" in result.hits[0].text
+
+
+# --- the per-message pipeline graph reads this; it must be consistent -------
+def test_trace_describes_the_run_without_changing_it(retriever):
+    result = retriever.retrieve("What does error ND-1042 mean?")
+    trace = result.trace
+    assert {"bm25", "vector", "fuse", "boost", "window", "rerank"} <= set(trace)
+    assert trace["vector"]["dimension"] == 1024 and len(trace["vector"]["preview"]) == 8
+    assert "nd-1042" in trace["boost"]["codes_in_question"] and trace["boost"]["matched"]
+    assert 0 < len(trace["window"]["candidates"]) <= config.RERANK_CANDIDATES
+    # what the trace says was kept is exactly what the pipeline returned
+    kept = [row["id"] for row in trace["rerank"]["candidates"] if row["kept"]]
+    assert kept == [hit.chunk_id for hit in result.hits]
