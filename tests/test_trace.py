@@ -245,9 +245,11 @@ def test_steps_and_pipeline_are_an_accordion_that_opens_at_the_first_step():
     assert "list.hidden = !wantSteps" in body and "showPipeline(wantPipe)" in body
     # opening the pipeline scrolls to ITS top and stops following the stream,
     # instead of down(), which jumped to the last steps
-    opened = body[body.index("if(wantPipe){"):body.index("}else{")]
+    opened = body[body.index("if(wantPipe || wantSteps){"):body.index("}else{")]
     opened = re.sub(r"/\*.*?\*/", "", opened, flags=re.S)       # comments may mention down()
     assert "contentTop(wrap)" in opened and "stick = false" in opened and "down()" not in opened
+    # a single step's sub-steps are brought into view too, not left below the fold
+    assert "if(!open) revealBlock(li); else down();" in html
 
 
 def test_pipeline_script_never_writes_raw_data_with_innerhtml():
