@@ -340,8 +340,9 @@ def test_reminder_is_in_the_question_language():
 
 
 def test_reminder_is_not_added_when_there_are_no_documents():
+    from src.chat.prompts import REMINDER_BN, REMINDER_EN
     content = build_messages("anything", [])[-1]["content"]
-    assert "Check before answering" not in content
+    assert REMINDER_EN not in content and REMINDER_BN not in content
 
 
 def test_reminder_never_touches_the_cached_system_prompt():
