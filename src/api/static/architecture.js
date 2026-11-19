@@ -73,6 +73,154 @@
     box('Stream it to this page', 'Word by word, with the step list and the sources'),
   ].join('');
 
+  /* ------------------------------------------- LangChain diagrams ------ */
+  /* Drawn as SVG so they scale and follow the light/dark colour tokens. The
+     classes (own / lc / ext / warn) are styled in index.html. Three colours
+     mean three things: blue = LangChain, plain = this project's own code,
+     dashed = a separate program. */
+  const LC_MAP = `
+  <svg class="lcsvg" viewBox="0 0 840 596" role="img" aria-labelledby="lcm-t lcm-d">
+    <title id="lcm-t">Where LangChain sits in the system</title>
+    <desc id="lcm-d">The browser talks to the web server, which runs the engine. The engine does
+      its own searching, and sends its two model calls through a switch that chooses either the
+      native client or LangChain. Both reach the local Ollama server.</desc>
+    <defs><marker id="lca1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7"
+      orient="auto"><path class="head" d="M0 0L10 5L0 10z"/></marker></defs>
+
+    <rect class="own" x="320" y="8" width="200" height="40" rx="6"/>
+    <text class="t" x="420" y="33" text-anchor="middle">Browser · chat page</text>
+    <path class="edge" d="M420 48V84" marker-end="url(#lca1)"/>
+    <text class="s" x="432" y="70">events: stage · trace · token · done</text>
+    <rect class="own" x="320" y="84" width="200" height="40" rx="6"/>
+    <text class="t" x="420" y="109" text-anchor="middle">FastAPI · app.py</text>
+    <path class="edge" d="M420 124V158" marker-end="url(#lca1)"/>
+    <rect class="own" x="40" y="158" width="760" height="46" rx="6"/>
+    <text class="t" x="420" y="178" text-anchor="middle">engine.py · the conductor</text>
+    <text class="s" x="420" y="195" text-anchor="middle">runs the 17 steps and sends one event for each</text>
+
+    <path class="edge" d="M220 204V240" marker-end="url(#lca1)"/>
+    <text class="s" x="232" y="226">search</text>
+    <rect class="grp" x="40" y="240" width="360" height="304" rx="8"/>
+    <text class="t" x="56" y="263">Your own code · no LangChain</text>
+    <rect class="own" x="56" y="276" width="328" height="34" rx="5"/>
+    <text class="s2" x="220" y="298" text-anchor="middle">greeting check · injection guard · memory</text>
+    <rect class="own" x="56" y="318" width="328" height="34" rx="5"/>
+    <text class="s2" x="220" y="340" text-anchor="middle">BM25 words  +  Qdrant meaning (bge-m3)</text>
+    <rect class="own" x="56" y="360" width="328" height="34" rx="5"/>
+    <text class="s2" x="220" y="382" text-anchor="middle">merge (RRF) · exact-code boost · shortlist of 12</text>
+    <rect class="own" x="56" y="402" width="328" height="34" rx="5"/>
+    <text class="s2" x="220" y="424" text-anchor="middle">Jina re-ranker · outdated policies pushed down</text>
+    <rect class="own" x="56" y="444" width="328" height="34" rx="5"/>
+    <text class="s2" x="220" y="466" text-anchor="middle">relevance floor 0.088 · says “I don’t know”</text>
+    <text class="s" x="56" y="498">Why not LangChain here: the Pipeline page also shows the</text>
+    <text class="s" x="56" y="513">query tokens, shortlist rules, the floor verdict and the time</text>
+    <text class="s" x="56" y="528">of each step. None of that belongs to one passage, so a</text>
+    <text class="s" x="56" y="543" dy="0">retriever call has nowhere to report it.</text>
+
+    <path class="edge" d="M620 204V240" marker-end="url(#lca1)"/>
+    <text class="s" x="632" y="226">2 model calls: rewrite + answer</text>
+    <rect class="own" x="440" y="240" width="360" height="42" rx="6"/>
+    <text class="t" x="620" y="258" text-anchor="middle">prompts.py · builds the messages</text>
+    <text class="s" x="620" y="274" text-anchor="middle">unchanged — the same text goes out either way</text>
+    <path class="edge" d="M620 282V306" marker-end="url(#lca1)"/>
+    <rect class="key" x="440" y="306" width="360" height="50" rx="6"/>
+    <text class="t" x="620" y="326" text-anchor="middle">backend.py · the switch</text>
+    <text class="s" x="620" y="344" text-anchor="middle">USE_LANGCHAIN in .env · read on every call</text>
+    <path class="edge" d="M525 356V398" marker-end="url(#lca1)"/>
+    <path class="edge" d="M715 356V398" marker-end="url(#lca1)"/>
+    <text class="s" x="505" y="382" text-anchor="end">off</text>
+    <text class="s" x="727" y="382">on</text>
+
+    <rect class="own" x="440" y="398" width="170" height="72" rx="6"/>
+    <text class="t" x="525" y="421" text-anchor="middle">llm.py</text>
+    <text class="s" x="525" y="440" text-anchor="middle">native httpx client</text>
+    <text class="s" x="525" y="456" text-anchor="middle">the default</text>
+    <rect class="lc" x="630" y="398" width="170" height="72" rx="6"/>
+    <text class="t" x="715" y="421" text-anchor="middle">lc.py · LangChain</text>
+    <text class="s" x="715" y="440" text-anchor="middle">ChatPromptTemplate</text>
+    <text class="s" x="715" y="456" text-anchor="middle">| ChatOllama</text>
+    <path class="edge" d="M525 470V508" marker-end="url(#lca1)"/>
+    <path class="edge" d="M715 470V508" marker-end="url(#lca1)"/>
+    <rect class="ext" x="440" y="508" width="360" height="46" rx="6"/>
+    <text class="t" x="620" y="528" text-anchor="middle">Ollama server · runs on this computer</text>
+    <text class="s" x="620" y="545" text-anchor="middle">qwen3:4b writes · qwen3:1.7b rewrites</text>
+
+    <rect class="lc" x="40" y="566" width="14" height="14" rx="3"/>
+    <text class="s" x="60" y="578">LangChain</text>
+    <rect class="own" x="150" y="566" width="14" height="14" rx="3"/>
+    <text class="s" x="170" y="578">this project’s own code</text>
+    <rect class="ext" x="340" y="566" width="14" height="14" rx="3"/>
+    <text class="s" x="360" y="578">a separate program</text>
+  </svg>`;
+
+  const LC_INSIDE = `
+  <svg class="lcsvg" viewBox="0 0 840 356" role="img" aria-labelledby="lci-t lci-d">
+    <title id="lci-t">What happens inside lc.py</title>
+    <desc id="lci-d">The messages are converted to LangChain message objects, passed through a prompt
+      template and into ChatOllama, which streams from Ollama. The text chunks become token events
+      and the final chunk becomes the done event.</desc>
+    <defs><marker id="lca2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7"
+      orient="auto"><path class="head" d="M0 0L10 5L0 10z"/></marker></defs>
+
+    <rect class="own" x="8" y="18" width="180" height="82" rx="6"/>
+    <text class="t" x="98" y="42" text-anchor="middle">① messages</text>
+    <text class="s" x="98" y="62" text-anchor="middle">from prompts.py:</text>
+    <text class="s" x="98" y="78" text-anchor="middle">a list of {role, content}</text>
+    <path class="edge" d="M188 59H224" marker-end="url(#lca2)"/>
+    <rect class="lc" x="226" y="18" width="180" height="82" rx="6"/>
+    <text class="t" x="316" y="42" text-anchor="middle">② to_messages()</text>
+    <text class="s" x="316" y="62" text-anchor="middle">dicts become System /</text>
+    <text class="s" x="316" y="78" text-anchor="middle">Human / AI message objects</text>
+    <path class="edge" d="M406 59H442" marker-end="url(#lca2)"/>
+    <rect class="lc" x="444" y="18" width="180" height="82" rx="6"/>
+    <text class="t" x="534" y="42" text-anchor="middle">③ ChatPromptTemplate</text>
+    <text class="s" x="534" y="62" text-anchor="middle">one MessagesPlaceholder:</text>
+    <text class="s" x="534" y="78" text-anchor="middle">passes them through untouched</text>
+    <path class="edge" d="M624 59H660" marker-end="url(#lca2)"/>
+    <rect class="lc" x="662" y="18" width="170" height="82" rx="6"/>
+    <text class="t" x="747" y="40" text-anchor="middle">④ ChatOllama</text>
+    <text class="s" x="747" y="58" text-anchor="middle">num_gpu=0 · num_ctx</text>
+    <text class="s" x="747" y="73" text-anchor="middle">num_thread · temperature</text>
+    <text class="s" x="747" y="88" text-anchor="middle">reasoning=False · keep_alive</text>
+
+    <path class="edge" d="M747 100V148" marker-end="url(#lca2)"/>
+    <text class="s" x="759" y="130">HTTP, streaming</text>
+    <rect class="ext" x="662" y="148" width="170" height="70" rx="6"/>
+    <text class="t" x="747" y="174" text-anchor="middle">⑤ Ollama /api/chat</text>
+    <text class="s" x="747" y="194" text-anchor="middle">sends the text in pieces</text>
+    <path class="edge" d="M662 183H628" marker-end="url(#lca2)"/>
+    <rect class="lc" x="444" y="148" width="182" height="70" rx="6"/>
+    <text class="t" x="535" y="172" text-anchor="middle">⑥ text pieces</text>
+    <text class="s" x="535" y="192" text-anchor="middle">each one becomes</text>
+    <text class="s" x="535" y="207" text-anchor="middle">a (“token”, text) frame</text>
+    <path class="edge" d="M444 183H410" marker-end="url(#lca2)"/>
+    <rect class="lc" x="226" y="148" width="182" height="70" rx="6"/>
+    <text class="t" x="317" y="172" text-anchor="middle">⑦ last piece</text>
+    <text class="s" x="317" y="192" text-anchor="middle">done=true + timings</text>
+    <text class="s" x="317" y="207" text-anchor="middle">→ (“done”, metrics)</text>
+    <path class="edge" d="M226 183H192" marker-end="url(#lca2)"/>
+    <rect class="own" x="8" y="148" width="182" height="70" rx="6"/>
+    <text class="t" x="99" y="172" text-anchor="middle">⑧ engine.py</text>
+    <text class="s" x="99" y="192" text-anchor="middle">receives the same frames</text>
+    <text class="s" x="99" y="207" text-anchor="middle">llm.py would have sent</text>
+
+    <rect class="warn" x="8" y="252" width="268" height="88" rx="6"/>
+    <text class="t" x="142" y="276" text-anchor="middle">Errors are translated</text>
+    <text class="s" x="142" y="296" text-anchor="middle">library errors become LLMTimeout,</text>
+    <text class="s" x="142" y="311" text-anchor="middle">LLMUnavailable, LLMBadResponse,</text>
+    <text class="s" x="142" y="326" text-anchor="middle">so the engine needs no change</text>
+    <rect class="warn" x="286" y="252" width="268" height="88" rx="6"/>
+    <text class="t" x="420" y="276" text-anchor="middle">Cloud tracing forced off</text>
+    <text class="s" x="420" y="296" text-anchor="middle">LangSmith would send every question</text>
+    <text class="s" x="420" y="311" text-anchor="middle">and passage away. Off even if the</text>
+    <text class="s" x="420" y="326" text-anchor="middle">shell says “true” (a test pins it)</text>
+    <rect class="own" x="564" y="252" width="268" height="88" rx="6"/>
+    <text class="t" x="698" y="276" text-anchor="middle">Stopping really stops</text>
+    <text class="s" x="698" y="296" text-anchor="middle">closing the stream frees the model:</text>
+    <text class="s" x="698" y="311" text-anchor="middle">the next request took 0.4 s</text>
+    <text class="s" x="698" y="326" text-anchor="middle">(measured, not assumed)</text>
+  </svg>`;
+
   /* ---------------------------------------------------------- page ---- */
 
   arch.innerHTML = `
@@ -360,5 +508,119 @@
     channels, they look different on screen, and the evaluation scores them as different
     outcomes. A broken pipeline that quietly says “I could not find that” would
     be the worst possible failure for a tool whose whole purpose is to be trusted.</p>
+
+    <h3><span class="num">10</span>LangChain: where it fits</h3>
+
+    <p><b>LangChain</b> is a free toolkit of ready-made parts for programs built around a
+    language model: talking to a model, building prompts, chaining steps together. This
+    project was first written without it. It has now been added in <b>one narrow place</b>,
+    as a switch that can be turned on and off.</p>
+
+    <div class="callout">
+      <p><b>Off by default.</b> Put <code>USE_LANGCHAIN=1</code> in <code>.env</code> and
+      restart: the two model calls (rewriting a follow-up, and writing the answer) then go
+      through LangChain. <code>/health</code> reports <code>"backend": "langchain"</code>, and
+      the Pipeline page says so under every message. Everything else — the prompt text, the
+      search, the guardrails, the events your browser receives — is the same code either way.</p>
+      <p>It changes <em>how the model is called</em>, not <em>what the model says</em>. It is
+      not an accuracy improvement, and nothing on this page claims it is.</p>
+    </div>
+
+    <div class="flane">The whole system · which part is LangChain</div>
+    <p class="lchint">Swipe sideways to see the whole diagram →</p>
+    <div class="lcwrap">${LC_MAP}</div>
+
+    ${table(['Part', 'Written with', 'Why'], [
+      ['<b>The two model calls</b><br><small>rewrite, answer</small>',
+       'LangChain when the switch is on; <code>llm.py</code> when off',
+       'This is the only place a toolkit adds anything useful: one standard way to call a ' +
+       'model, so trying another model provider later is a one-line change.'],
+      ['<b>Prompt text</b>', '<code>prompts.py</code>, unchanged',
+       'Every sentence in it was added for a measured reason. LangChain only <em>carries</em> ' +
+       'the finished messages; it must not re-interpret them.'],
+      ['<b>Search, merge, re-rank, floor</b>', 'This project’s own code',
+       'A LangChain retriever returns only a list of passages. Per-passage scores would fit ' +
+       'in each passage’s metadata, but the Pipeline page also shows things that belong to no ' +
+       'single passage — the query tokens, the shortlist rules, the floor verdict, the time of ' +
+       'every step — and a retriever call has no place to report them.'],
+      ['<b>Guardrails</b>', 'This project’s own code',
+       'They run before and after the model, in plain code you can read and test.'],
+      ['<b>Cloud tracing (LangSmith)</b>', 'Forced off',
+       'It would send every question and retrieved passage to a third party. This system’s ' +
+       'promise is that nothing leaves the machine.'],
+    ])}
+
+    <h3><span class="num">11</span>Inside the LangChain part</h3>
+
+    <p>When the switch is on, <code>lc.py</code> does five small things, in this order.
+    The file is about 180 lines, and the numbers below match the diagram.</p>
+
+    <p class="lchint">Swipe sideways to see the whole diagram →</p>
+    <div class="lcwrap">${LC_INSIDE}</div>
+
+    <ol class="plain">
+      <li><b>① ② Turn the messages into objects.</b> <code>prompts.py</code> produces a
+      plain list of <code>{role, content}</code>. LangChain wants typed message objects, so
+      each one becomes a <code>SystemMessage</code>, <code>HumanMessage</code> or
+      <code>AIMessage</code>, in the same order.</li>
+      <li><b>③ Pass them through a prompt template.</b> The template holds a single
+      placeholder that carries the messages through untouched. This matters: the retrieved
+      passages contain <code>{ }</code> and <code>&lt;document&gt;</code>, and a template that tried to
+      interpret them would crash or silently change what the model reads. A test pins this.</li>
+      <li><b>④ Call the model with the same settings.</b> <code>ChatOllama</code> is given the
+      options the native client always sent. <code>num_gpu=0</code> is not cosmetic: without it
+      Ollama tries the unusable graphics card. <code>reasoning=False</code> is Ollama’s
+      <code>think: false</code>: without it the small rewriter spends its whole budget “thinking”
+      and returns nothing. A test checks these reach the actual HTTP request, not just the object.</li>
+      <li><b>⑤ ⑥ ⑦ Stream the reply back.</b> Each text piece becomes a <code>token</code>
+      frame. The last piece carries Ollama’s <code>done</code> flag and the timings, and becomes
+      the <code>done</code> frame. A stream that ends without that flag sends no <code>done</code>
+      at all, and the engine treats that as a failure — never as a finished answer.</li>
+      <li><b>⑧ The engine cannot tell the difference.</b> It receives exactly the frames the
+      native client would have sent, which is why the Pipeline, the Context view and the saved
+      conversations needed no change.</li>
+    </ol>
+
+    <h3><span class="num">12</span>What you see in the Pipeline after every message</h3>
+
+    <p>The two steps that call a model now say which code made the call, for that message.</p>
+
+    ${table(['Where', 'What it shows', 'When'], [
+      ['<b>Rewrite the follow-up</b> and <b>Write the answer</b> — tag',
+       '<code>LangChain · ChatOllama</code> or plain <code>Ollama</code>',
+       'On every message that ran a model'],
+      ['The same two steps, opened — a row',
+       '<b>Called through</b>: <code>LangChain (ChatPromptTemplate | ChatOllama)</code> or ' +
+       '<code>Native client (httpx)</code>',
+       'On every message; absent on old saved messages that predate it'],
+      ['A first question has no rewrite step',
+       'No tag claiming a backend — no model ran, so nothing is claimed',
+       'First message of a conversation'],
+    ])}
+
+    <h3><span class="num">13</span>What was checked, and what was not</h3>
+
+    <ul class="plain">
+      <li><b>Same request.</b> On identical messages the model reported the same prompt size
+      through both paths (313 and 34 tokens) and wrote the same text.</li>
+      <li><b>Same events.</b> For a first question and a follow-up, both paths produced the same
+      events in the same order, the same 17 Pipeline steps, and word-for-word identical answers.</li>
+      <li><b>Stopping works.</b> Abandoning an answer through LangChain freed the model at once;
+      the next request took 0.4 s instead of queueing behind it.</li>
+      <li><b>Cloud tracing cannot be switched on by accident</b> — tested with the shell
+      variable set to “true”.</li>
+      <li><b>The full 40-question exam, with LangChain on:</b> 40 of 40 correct, no technical
+      errors. The one question the automatic grader has wrongly passed before (the canteen
+      price) was checked by hand: the answer contains both the staff and the guest price. The
+      run started a few minutes before the Pipeline tag was added; that edit only adds trace
+      data, and two questions re-checked on the final code gave identical events and answers on
+      both paths.</li>
+      <li><b>Not measured:</b> any speed difference. The two paths ran one after the other, and
+      the second always found the model’s cache already warm, so a timing comparison would be
+      unfair. No speed claim is made.</li>
+      <li><b>The cost:</b> three extra packages (<code>langchain-core</code>,
+      <code>langchain-ollama</code>, <code>ollama</code>), plus LangChain’s cloud-tracing client
+      that arrives with them and is never used. They are loaded only when the switch is on.</li>
+    </ul>
   `;
 })();

@@ -14,7 +14,9 @@ from __future__ import annotations
 import re
 
 from .. import config
-from .llm import LLMError, chat
+from .backend import chat
+from .backend import name as backend_name
+from .llm import LLMError
 from .prompts import REWRITE_SYSTEM_PROMPT, build_rewrite_messages
 
 # The small model sometimes decorates its answer despite being told not to.
@@ -59,6 +61,7 @@ def rewrite_with_trace(question: str, history: list[dict[str, str]] | None = Non
 
     messages = build_rewrite_messages(question, history)
     trace["input"] = messages[-1]["content"]
+    trace["backend"] = backend_name()      # only when a model really runs
     try:
         result = chat(messages, model=model,
                       num_predict=config.REWRITE_MAX_TOKENS,

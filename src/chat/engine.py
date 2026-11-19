@@ -27,7 +27,9 @@ from typing import Any, Iterator
 from .. import config
 from ..index.types import Hit
 from ..retrieve.pipeline import RetrievalResult, Retriever
-from .llm import LLMError, chat, chat_stream
+from .backend import chat, chat_stream      # native httpx or LangChain: config.USE_LANGCHAIN
+from .backend import name as backend_name
+from .llm import LLMError
 from .memory import Conversation
 from ..ingest.sanitise import INJECTION_PATTERNS, find_injections
 from .prompts import (NO_ANSWER_TEXT, PROMPT_EXTRACTION_REFUSAL,
@@ -563,6 +565,9 @@ class ChatEngine:
             "write_tokens_per_s": round(metrics.get("output_tokens", 0) / generate_s, 1)
                                    if generate_s else None,
             "load_s": round(float(metrics.get("load_seconds", 0.0) or 0.0), 2),
+            # Which code made the call. Recorded so the Pipeline page can say so
+            # on every message instead of the reader having to trust the config.
+            "backend": backend_name(),
             "answer_raw": answer},
             ms=stream_seconds * 1000, model=used_model)
         yield _node("cite", {

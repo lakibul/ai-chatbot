@@ -90,6 +90,12 @@ ALT_EMBED_MODEL = _env("ALT_EMBED_MODEL", "nomic-embed-text")
 
 REQUIRED_MODELS = (LLM_MODEL, DEV_LLM_MODEL, EMBED_MODEL)
 
+# Which code talks to Ollama. "0" = the hand-written httpx client in llm.py,
+# "1" = LangChain's ChatOllama (src/chat/lc.py). Both send the SAME request and
+# produce the SAME events, so the UI, the Pipeline page and the tests cannot
+# tell them apart. Switch with USE_LANGCHAIN=1 in .env, then restart.
+USE_LANGCHAIN = _env_flag("USE_LANGCHAIN", False)
+
 # Mandatory generation options (plan 2.1). These are correctness requirements
 # on this hardware, not tuning preferences.
 NUM_GPU = _env_int("NUM_GPU", 0)          # force CPU: a 2 GB GT 1030 cannot hold a 4B Q4

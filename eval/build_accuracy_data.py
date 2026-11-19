@@ -47,6 +47,7 @@ RESULTS = config.EVAL_RESULTS_DIR
 ANSWER_AFFECTING = (
     "src/chat/prompts.py", "src/chat/engine.py", "src/chat/memory.py",
     "src/chat/smalltalk.py", "src/chat/rewrite.py", "src/chat/llm.py",
+    "src/chat/backend.py", "src/chat/lc.py",
     "src/config.py", "src/retrieve/pipeline.py", "src/retrieve/rrf.py",
     "src/retrieve/rerank.py", "src/retrieve/code_boost.py",
     "src/ingest/chunk.py", "src/ingest/sanitise.py", "src/index/embed.py",

@@ -149,8 +149,30 @@ if you swap them:
 | `rewrite.py` | Turns "and for sick leave?" into a question that stands alone |
 | `prompts.py` | **The exact text sent to the model.** Every sentence here was added because of a real failure |
 | `llm.py` | Talks to Ollama and streams the answer back word by word |
+| `backend.py` | **The switch.** Sends each model call to `llm.py` or to `lc.py`, depending on `USE_LANGCHAIN` in `.env` |
+| `lc.py` | The same two model calls written with **LangChain** (`ChatPromptTemplate \| ChatOllama`). Not loaded unless the switch is on |
 | `memory.py` | Remembers the last 6 turns, and saves conversations to disk |
 | `engine.py` | **The conductor.** Calls everything above in order |
+
+### LangChain: what it is used for here, and what it is not
+
+Set `USE_LANGCHAIN=1` in `.env` and restart. `GET /health` then reports
+`"backend": "langchain"`.
+
+| Part | With the switch on |
+|---|---|
+| The two model calls (answer, rewrite) | **LangChain** — `ChatPromptTemplate \| ChatOllama` |
+| Prompt text, history, fencing | unchanged (`prompts.py`) |
+| Search, merge, re-rank, floor, guardrails | unchanged — still this project's own code |
+| Events the browser receives, the Pipeline page | identical |
+| Cloud tracing (LangSmith) | **forced off** — nothing leaves the machine |
+
+Retrieval is deliberately not LangChain. A LangChain retriever returns only a
+list of documents. Per-passage numbers (a score, a rank) would fit in each
+document's `metadata`, but the Pipeline page also shows things that belong to no
+single passage — the query tokens, the shortlist rules, the relevance-floor
+verdict, the time of every step — and a retriever call has no place to report
+them. Keeping them would mean routing them around the retriever.
 
 **`engine.py` is the heart of the project** (585 lines, the largest Python
 file). One question goes in, and a stream of small messages comes out:
@@ -253,7 +275,7 @@ SERVER    api/app.py              receives it, opens a stream back
    │
    ├─ 6 ─ chat/engine.py          is the best one relevant enough?
    ├─ 7 ─ chat/prompts.py         build the exact text for the model
-   ├─ 8 ─ chat/llm.py             send it to Ollama, stream words back
+   ├─ 8 ─ chat/backend.py         send it to Ollama (llm.py, or lc.py if USE_LANGCHAIN=1)
    ├─ 9 ─ chat/engine.py          which documents did the answer cite?
    └─10 ─ chat/memory.py          save the conversation
    │

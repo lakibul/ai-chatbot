@@ -14,6 +14,9 @@
 - [পর্ব ৩ — একটা একটা করে সব ধারণা](#পর্ব-৩--একটা-একটা-করে-সব-ধারণা)
 - [পর্ব ৪ — বাকি মৌলিক ধারণা ও যা যা বানানো হয়েছে](#পর্ব-৪--বাকি-মৌলিক-ধারণা-ও-যা-যা-বানানো-হয়েছে)
 - [পর্ব ৫ — CTO যা যা জিজ্ঞেস করতে পারেন](#পর্ব-৫--cto-যা-যা-জিজ্ঞেস-করতে-পারেন)
+- [পর্ব ৬ — LangChain: শূন্য থেকে প্রো (A to Z)](#পর্ব-৬--langchain-শূন্য-থেকে-প্রো-a-to-z)
+
+> **LangChain শিখতে চান?** সরাসরি পর্ব ৬-এ যান। শূন্য থেকে শুরু, প্রতিটা কোড সত্যিই চালানো, আর এই প্রজেক্টে LangChain কোথায় বসানো — সব সেখানে।
 
 > **AI-তে নতুন?** আগে ১.৪-এর [Context কী? (আগে এটা পড়ুন)](#context-কী-আগে-এটা-পড়ুন) অংশটা পড়ুন। পুরো গাইডের সবচেয়ে মৌলিক ধারণা ওটাই।
 
@@ -756,6 +759,8 @@ rewrite → BM25 + vector → RRF → boost → rerank → floor → generate
 
 এখানে ধাপের ক্রমটা **কোডে ঠিক করে দেওয়া**, মডেল ঠিক করে না। এটা ইচ্ছা করেই —
 এতে ফল প্রতিবার একই আসে (reproducible), আর টেস্ট করা যায়।
+
+> **LangChain নিয়ে একটা কথা:** এখানে যা লেখা (ধাপের ক্রম কোডে ঠিক করা, multi-agent নেই) তা এখনো সত্যি। LangChain এখন শুধু **দুটো মডেল-কলে** একটা ঐচ্ছিক switch হিসেবে আছে — pipeline-এর ক্রম, খোঁজা বা guardrail-এ নয়। বিস্তারিত পর্ব ৬ (৬.১৯)-এ।
 
 ---
 
@@ -1858,6 +1863,1623 @@ python -m src.index
 
 ---
 
+# পর্ব ৬ — LangChain: শূন্য থেকে প্রো (A to Z)
+
+> **এই পর্বের লক্ষ্য:** LangChain কী, কেন, কীভাবে — এবং **এই প্রজেক্টে এটা ঠিক কোথায় বসানো হয়েছে** —
+> সবকিছু শূন্য থেকে শিখিয়ে দেওয়া। এখানে যা যা লেখা আছে, তার প্রতিটা কোড **সত্যিই চালিয়ে দেখা**
+> হয়েছে, আর আউটপুট হুবহু বসানো হয়েছে।
+
+## ৬.০ এই পর্ব কীভাবে পড়বেন (আগে এটা পড়ুন)
+
+### তিনটা নিয়ম
+
+1. **কোড সত্যিই চালানো।** প্রতিটা কোড-ব্লকের নিচে যে `আউটপুট` আছে, সেটা আমি নিজে চালিয়ে পেয়েছি।
+   কিছু বানিয়ে লেখা হয়নি। যা চালিয়ে দেখা হয়নি, সেখানে স্পষ্ট লেখা আছে **⚠️ যাচাই করা হয়নি**।
+2. **ভার্সন গুরুত্বপূর্ণ।** LangChain **খুব দ্রুত বদলায়।** এই গাইডের সব কোড নিচের ভার্সনে চালানো (Python 3.10, নভেম্বর ২০২৬):
+
+   | প্যাকেজ | ভার্সন |
+   |---|---|
+   | `langchain-core` | 1.7.7 |
+   | `langchain-ollama` | 1.1.0 |
+   | `ollama` (Python লাইব্রেরি) | 0.6.3 |
+   | `langchain` | 1.4.10 |
+   | `langgraph` | 1.2.23 |
+   | `langchain-text-splitters` | 1.1.3 |
+   | `langchain-classic` | 1.0.8 |
+
+   ভার্সন বদলালে কিছু কোড ভাঙতে পারে। এটা কল্পনা নয় — লিখতে গিয়েই আমি নিজে একটা পুরোনো জিনিস ধরেছি
+   (৬.১১-তে দেখুন: `RunnableWithMessageHistory` এখন **deprecated**, অথচ পুরোনো টিউটোরিয়ালে এখনো এটাই শেখানো হয়)।
+3. **সৎ কথা: "কিছুই বাদ নেই" বলা যায় না।** LangChain একটা বিশাল জগৎ — শত শত integration, প্রতি সপ্তাহে নতুন জিনিস।
+   কোনো একটা গাইডে *সবকিছু* থাকা সম্ভব নয়। এই গাইড **সব মূল ধারণা** শেখায়, যা শিখলে বাকিটা নিজে পড়ে বুঝতে পারবেন।
+   আর **কোন কোন জিনিস এখানে নেই**, তার পুরো তালিকা দেওয়া আছে [৬.২৫](#৬২৫-প্রো-হওয়ার-পথ--আর-এই-গাইডে-যা-নেই)-এ।
+
+### কোড নিজে চালাতে চাইলে
+
+সব উদাহরণ প্রজেক্টের `examples/langchain/` ফোল্ডারে আছে। **আলাদা একটা venv** বানান (প্রজেক্টের venv-এ হাত দেবেন না — ওখানে শুধু দরকারি অল্প প্যাকেজ pin করা):
+
+```bash
+python -m venv lcenv
+lcenv\Scripts\activate
+pip install langchain langgraph langchain-text-splitters langchain-ollama langchain-classic rank_bm25 grandalf
+python examples/langchain/c01_basics.py
+```
+
+প্রথম পাঁচটা ফাইল (`c01` থেকে `c05`) **কোনো আসল মডেল ছাড়াই** চলে — নকল (fake) মডেল দিয়ে। তাই ইনস্ট্যান্ট, আর
+প্রতিবার একই ফল। শেষের `c06` আসল Ollama মডেল দিয়ে চলে।
+
+---
+
+## ৬.১ LangChain কী?
+
+### এক লাইনে
+
+**LangChain হলো একটা বিনামূল্যের কোড-লাইব্রেরি (Python ও JavaScript), যেটা AI মডেলকে ঘিরে প্রোগ্রাম বানানোর তৈরি-করা যন্ত্রাংশ দেয়।**
+
+### সহজ উদাহরণ: রান্নাঘর
+
+ধরুন আপনি রান্না করছেন। দরকার: চুলা, রেসিপি, হাঁড়ি, প্লেট, আর রান্নার ক্রম।
+
+| রান্নাঘরে | LangChain-এ | মানে |
+|---|---|---|
+| চুলা | **Chat Model** | AI মডেল, যে আসল কাজটা করে |
+| রেসিপি | **Prompt Template** | মডেলকে কী বলা হবে, তার ছাঁচ |
+| প্লেটে সাজানো | **Output Parser** | মডেলের উত্তরকে কাজের আকারে আনা |
+| রান্নার ক্রম (কেটে → ভাজা → সাজানো) | **Chain** | ধাপগুলো জোড়া লাগানো |
+| ফ্রিজে রাখা উপকরণ থেকে বের করা | **Retriever** | ডকুমেন্ট থেকে খুঁজে আনা |
+| সহকারী যে নিজে সিদ্ধান্ত নেয় | **Agent** | মডেল নিজেই ঠিক করে কোন যন্ত্র চালাবে |
+
+আপনি চাইলে এই সবকিছু **নিজেই হাতে** বানাতে পারেন (এই প্রজেক্ট ঠিক তা-ই করেছে)। LangChain শুধু
+"তৈরি যন্ত্রাংশ" দেয়, যাতে প্রতিবার গোড়া থেকে বানাতে না হয়।
+
+### LangChain কী করে না
+
+1. **মডেলকে বুদ্ধিমান বানায় না।** একই ৪B মডেল LangChain দিয়ে ডাকলেও একই ভুল করে। (আমরা মেপে দেখেছি — ৬.১৯)
+2. **ভুল উত্তর ঠিক করে না।** "hallucination" মডেলের ব্যাপার, লাইব্রেরির নয়।
+3. **আপনার জন্য ভালো prompt লেখে না।**
+
+### কখন লাগে, কখন লাগে না
+
+| LangChain কাজে লাগে | LangChain-এর দরকার নেই |
+|---|---|
+| একাধিক মডেল/প্রোভাইডার বদলে বদলে ব্যবহার করবেন | একটাই মডেল, একটাই সরল কল |
+| agent, tool, জটিল ধাপ-ক্রম (LangGraph) | ধাপগুলো সোজা: প্রশ্ন → খোঁজা → উত্তর |
+| তৈরি integration চান (শত শত vector DB, লোডার) | আপনার খোঁজা-কোড নিজের, যেটা আপনি পুরো নিয়ন্ত্রণে রাখতে চান |
+| দ্রুত প্রোটোটাইপ | প্রতিটা ধাপের সময় ও কাঁচা তথ্য দেখাতে হবে (এই প্রজেক্টের Pipeline পেজ) |
+
+**এই প্রজেক্ট দ্বিতীয় কলামের মানুষ ছিল** — তাই শুরুতে LangChain ছাড়াই বানানো। পরে শেখার জন্য আর
+মডেল-ডাকার জায়গায় একটা ঐচ্ছিক switch হিসেবে বসানো হয়েছে (৬.১৯)।
+
+### LangChain পরিবার: কোন প্যাকেজ কী (সবচেয়ে বেশি গুলিয়ে যায়)
+
+নামে "LangChain" থাকলেও এটা **একটা প্যাকেজ নয়, একটা পরিবার।** আমি প্রতিটার import নিজে চালিয়ে দেখেছি।
+
+| প্যাকেজ | কাজ | এই প্রজেক্ট ইনস্টল করেছে? |
+|---|---|---|
+| `langchain-core` | **ভিত্তি।** Messages, Prompts, Runnables (LCEL), Parsers, Tools, Retriever ও VectorStore-এর নিয়ম, Callbacks | ✅ হ্যাঁ |
+| `langchain-ollama` | Ollama-র জন্য: `ChatOllama`, `OllamaEmbeddings` | ✅ হ্যাঁ |
+| `langchain` | উঁচু স্তর: `create_agent`, `init_chat_model` | ❌ না (শুধু উদাহরণের venv-এ) |
+| `langgraph` | গ্রাফ বা state machine; স্মৃতি (persistence); মানুষের অনুমতি (human-in-the-loop) | ❌ না (শুধু উদাহরণের venv-এ) |
+| `langchain-text-splitters` | লম্বা লেখা টুকরো করা | ❌ না |
+| `langchain-classic` | পুরোনো-ধাঁচের chains ও retrievers (যেমন `EnsembleRetriever`) | ❌ না |
+| `langchain-community` | শত শত তৃতীয়-পক্ষের integration | ❌ না |
+| `langsmith` | ⚠️ **ক্লাউড** ট্রেসিং ও মূল্যায়ন সার্ভিসের client | ⚠️ আপনা-আপনি এসে পড়ে (`langchain-core`-এর dependency), **কিন্তু বন্ধ রাখা হয়েছে** (৬.১৫) |
+
+> **মনে রাখার সূত্র:** `core` = ইট-সিমেন্ট। `langchain` = তৈরি ঘর। `langgraph` = ঘরের ভেতরের চলাচলের নকশা।
+> `langsmith` = বাইরের CCTV কোম্পানি (যাদের কাছে আপনার ফুটেজ চলে যায়)।
+
+---
+
+## ৬.২ ইনস্টল ও ভার্সন বাঁধা (pin করা)
+
+```bash
+pip install langchain-core langchain-ollama
+```
+
+এই প্রজেক্টে `requirements.txt`-এ **সঠিক ভার্সন লিখে বাঁধা** আছে:
+
+```
+langchain-core==1.7.7
+langchain-ollama==1.1.0
+ollama==0.6.3
+```
+
+**কেন বাঁধা?** কারণ LangChain দ্রুত বদলায়। বাঁধা না থাকলে আগামী মাসে `pip install` করলে অন্য ভার্সন আসবে,
+আর কোনো একটা নাম বদলে গেলে প্রজেক্ট চুপচাপ ভেঙে যাবে। (`tests/test_langchain.py`-এর একটা টেস্ট ঠিক এটা পাহারা দেয়।)
+
+**`ollama` কেন আলাদা করে বাঁধা?** কারণ আমাদের `lc.py` সরাসরি `import ollama` করে (error ধরার জন্য)। যা নিজে import
+করি, তার ভার্সন নিজে বাঁধা উচিত — অন্যের dependency-র ভরসায় ছেড়ে দেওয়া উচিত নয়।
+
+---
+
+## ৬.৩ ধাপ ১ — Messages (বার্তা)
+
+মডেলের সাথে কথা হয় **বার্তার তালিকা** দিয়ে। প্রতিটা বার্তার একটা **ভূমিকা (role)** আছে।
+
+| LangChain-এর ক্লাস | role | কে বলছে |
+|---|---|---|
+| `SystemMessage` | `system` | নিয়মকানুন: "তুমি একজন সহায়ক…" |
+| `HumanMessage` | `human` (বা `user`) | ব্যবহারকারী |
+| `AIMessage` | `ai` (বা `assistant`) | মডেলের আগের উত্তর |
+| `ToolMessage` | `tool` | কোনো যন্ত্র চালানোর ফল (৬.১২) |
+
+```python
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+
+msgs = [SystemMessage("You are helpful."), HumanMessage("Hi"), AIMessage("Hello!")]
+for m in msgs:
+    print(type(m).__name__, "| role/type =", m.type, "| content =", repr(m.content))
+```
+
+আউটপুট:
+
+```
+SystemMessage | role/type = system | content = 'You are helpful.'
+HumanMessage | role/type = human | content = 'Hi'
+AIMessage | role/type = ai | content = 'Hello!'
+```
+
+**এই প্রজেক্টে:** আমাদের `prompts.py` সাধারণ `{"role": ..., "content": ...}` ডিকশনারির তালিকা বানায়। `lc.py`-এর
+`to_messages()` ফাংশন সেগুলোকে LangChain-এর বার্তা-অবজেক্টে বদলায়, **একই ক্রমে।** ক্রম বদলালে মডেল যা
+পড়ে তা বদলে যায় (আর KV cache-ও নষ্ট হয় — ১.৫ দেখুন)।
+
+---
+
+## ৬.৪ ধাপ ২ — Chat Model (চুলা)
+
+### তিনটা মূল কাজ: invoke, stream, batch
+
+| মেথড | কাজ | কখন |
+|---|---|---|
+| `.invoke(x)` | একটা ইনপুট দিন, **পুরো উত্তর একসাথে** পান | সহজ কাজ, ব্যাকগ্রাউন্ড |
+| `.stream(x)` | উত্তর **টুকরো টুকরো** করে পান | চ্যাট UI (এই প্রজেক্টের মতো) |
+| `.batch([x, y, z])` | অনেকগুলো ইনপুট একসাথে | অনেক প্রশ্ন একবারে |
+| `.ainvoke / .astream / .abatch` | একই কাজ, **async** (অপেক্ষার সময় অন্য কাজ করা যায়) | ওয়েব সার্ভার |
+
+নকল মডেল দিয়ে দেখি (কোনো আসল AI ছাড়াই, তাই তাৎক্ষণিক):
+
+```python
+from langchain_core.language_models.fake_chat_models import FakeListChatModel
+
+model = FakeListChatModel(responses=["Dhaka is the capital.", "Paris is the capital."])
+reply = model.invoke("Capital of Bangladesh?")
+print("invoke ->", type(reply).__name__, repr(reply.content))
+for chunk in FakeListChatModel(responses=["abc"]).stream("x"):
+    print("stream chunk:", repr(chunk.content), end="  ")
+print("batch  ->", [r.content for r in FakeListChatModel(responses=["one", "two"]).batch(["q1", "q2"])])
+```
+
+আউটপুট:
+
+```
+invoke -> AIMessage 'Dhaka is the capital.'
+stream chunk: 'a'  stream chunk: 'b'  stream chunk: 'c'
+batch  -> ['one', 'two']
+```
+
+> **নকল মডেল কেন শিখবেন?** টেস্টের জন্য। আসল মডেল ধীর (এই মেশিনে একটা উত্তরে ৪০-৬০ সেকেন্ড)। নকল মডেল দিয়ে
+> আপনার চেইন, prompt, parser — সব **তাৎক্ষণিক** টেস্ট করা যায়। এই প্রজেক্টের `tests/test_langchain.py` ঠিক এটাই করে।
+
+### আসল মডেল: `ChatOllama`
+
+এই প্রজেক্টের `src/chat/lc.py` থেকে (সরল করে):
+
+```python
+from langchain_ollama import ChatOllama
+
+model = ChatOllama(
+    model="qwen3:4b-instruct-2507-q4_K_M",
+    base_url="http://127.0.0.1:11434",
+    num_gpu=0,            # GPU বন্ধ — ২ GB GPU-তে ৪B মডেল ধরে না
+    num_ctx=4096,         # context window (১.৪ দেখুন)
+    num_thread=8,
+    temperature=0.1,      # কম = কম এলোমেলো
+    num_predict=512,      # সর্বোচ্চ কত টোকেন লিখবে
+    keep_alive="30m",     # মডেল মেমোরিতে ৩০ মিনিট ধরে রাখো
+    reasoning=False,      # = Ollama-র think:false
+)
+```
+
+**প্রতিটা option কেন দরকার** (এগুলো শখের নয়, মেপে ঠিক করা):
+
+| option | না দিলে কী হয় |
+|---|---|
+| `num_gpu=0` | Ollama ২ GB GPU-তে চেষ্টা করে — ধীর, এমনকি crash |
+| `num_ctx=4096` | মডেল তার বিজ্ঞাপিত ২৫৬K ধরে নেয়, ১৬ GB RAM-এ জায়গা ফুরায় |
+| `reasoning=False` | `qwen3:1.7b` একটা "ভাবনা-করা" মডেল; না বললে সব টোকেন ভাবতে খরচ করে, **উত্তর খালি আসে** |
+| `keep_alive="30m"` | Ollama-র নিজের ডিফল্ট সময় চলে। আমরা ৩০ মিনিট চেয়েছি, যাতে মডেল আবার লোড করার ১০-২০ সেকেন্ড (`config.py`-র মন্তব্যে মাপা) এড়ানো যায় |
+
+আমরা **নিশ্চিত হয়েছি** যে এই option-গুলো সত্যিই Ollama-র কাছে পৌঁছায় (শুধু অবজেক্টে জমা থাকে না) — `tests/test_langchain.py`
+ঠিক সেই HTTP কলটা ধরে দেখে: `num_gpu=0`, `think=False`, `num_predict` সব আছে।
+
+### আরেকটা পথ: `init_chat_model`
+
+⚠️ নিচের লাইনটা `c06` (আসল মডেল) ফাইলে চালানো হয়েছে — ৬.২০ দেখুন।
+
+---
+
+## ৬.৫ ধাপ ৩ — Prompt Template (রেসিপির ছাঁচ)
+
+প্রতিবার prompt হাতে লিখলে ভুল হয়। ছাঁচ বানিয়ে ফাঁকা জায়গায় ভ্যালু বসানো যায়।
+
+### সবচেয়ে সোজা: `PromptTemplate`
+
+```python
+from langchain_core.prompts import PromptTemplate
+pt = PromptTemplate.from_template("Tell me about {topic}.")
+print(repr(pt.invoke({"topic": "pricing"}).to_string()))
+```
+```
+'Tell me about pricing.'
+```
+
+### চ্যাটের জন্য: `ChatPromptTemplate` + `MessagesPlaceholder`
+
+```python
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.messages import AIMessage, HumanMessage
+
+cpt = ChatPromptTemplate.from_messages([
+    ("system", "You answer about {company}."),
+    MessagesPlaceholder("history", optional=True),   # আগের কথোপকথন এখানে ঢুকবে
+    ("human", "{question}"),
+])
+out = cpt.invoke({"company": "Nodi Tech", "question": "Hours?",
+                  "history": [HumanMessage("hi"), AIMessage("hello")]})
+for m in out.to_messages():
+    print(" ", m.type.ljust(6), m.content)
+print("input variables:", sorted(cpt.input_variables))
+```
+```
+  system You answer about Nodi Tech.
+  human  hi
+  ai     hello
+  human  Hours?
+input variables: ['company', 'question']
+```
+
+`MessagesPlaceholder` = "এখানে একগুচ্ছ বার্তা ঢুকবে।" এই প্রজেক্টের `lc.py` এই জিনিসটাই ব্যবহার করে — পুরো তৈরি-করা
+বার্তার তালিকা একটা placeholder দিয়ে **অবিকৃত** চেইনের ভেতর পাঠানো হয়।
+
+### ⚠️ সবচেয়ে বড় ফাঁদ: `{ }` (এই প্রজেক্টে সত্যিই পড়েছিলাম)
+
+Template-এর লেখায় `{নাম}` মানে "এখানে ভ্যালু বসবে।" তাহলে আপনার লেখার ভেতরেই যদি `{ }` থাকে?
+
+```python
+try:
+    ChatPromptTemplate.from_messages([("human", 'Return JSON like {"a": 1}')]).invoke({})
+except Exception as e:
+    print("template text with { } ->", type(e).__name__)
+ok = ChatPromptTemplate.from_messages([("human", 'Return JSON like {{"a": 1}}')]).invoke({})
+print("escaped with {{ }}      ->", ok.to_messages()[0].content)
+safe = ChatPromptTemplate.from_messages([("human", "{doc}")]).invoke({"doc": 'raw {text} <document>'})
+print("braces in the VALUE are safe ->", safe.to_messages()[0].content)
+```
+```
+template text with { } -> KeyError
+escaped with {{ }}      -> Return JSON like {"a": 1}
+braces in the VALUE are safe -> raw {text} <document>
+```
+
+**তিনটা শিক্ষা:**
+1. Template-এর **লেখার ভেতর** `{ }` থাকলে `KeyError` — LangChain ভাবে এটা একটা ভ্যালুর নাম।
+2. আসল `{` `}` লিখতে **দ্বিগুণ** করুন: `{{` `}}`।
+3. কিন্তু **ভ্যালুর ভেতর** `{ }` থাকলে কোনো সমস্যা নেই (তৃতীয় লাইন)।
+
+**এই প্রজেক্টে কেন গুরুত্বপূর্ণ:** আমাদের উদ্ধার-করা ডকুমেন্টে `{ }` আর `<document>` থাকে। যদি আমরা পুরো তৈরি-করা
+prompt-কে template-এর *লেখা* বানাতাম, কখনো crash করত, কখনো **চুপচাপ মডেলের পড়া লেখা বদলে দিত।** তাই আমরা
+`MessagesPlaceholder` দিয়ে বার্তা অবিকৃত পাঠাই। `test_braces_and_tags_in_documents_are_not_treated_as_a_template` টেস্ট এটা পাহারা দেয়।
+
+### আরও দুটো কাজের জিনিস
+
+**`partial` — কিছু ভ্যালু আগেই বসিয়ে রাখা:**
+
+```python
+p = ChatPromptTemplate.from_messages([("system", "Date is {today}."), ("human", "{q}")]).partial(today="2026-11-19")
+print(p.invoke({"q": "?"}).to_messages()[0].content)
+```
+```
+Date is 2026-11-19.
+```
+
+> ⚠️ **এই প্রজেক্টে এটা করা যাবে না!** system prompt-এ তারিখ বসালে প্রতিদিন বদলে যায়, আর **KV cache নষ্ট হয়** (১.৫)।
+> `partial` দারুণ জিনিস, কিন্তু এই প্রজেক্টের নিয়ম: *system prompt-এ কিছু ঢোকানো যাবে না।*
+
+**Few-shot — মডেলকে উদাহরণ দেখিয়ে শেখানো:**
+
+```python
+from langchain_core.prompts import FewShotChatMessagePromptTemplate
+examples = [{"q": "2+2", "a": "4"}, {"q": "3+3", "a": "6"}]
+shots = FewShotChatMessagePromptTemplate(
+    examples=examples,
+    example_prompt=ChatPromptTemplate.from_messages([("human", "{q}"), ("ai", "{a}")]))
+full = ChatPromptTemplate.from_messages([("system", "Maths."), shots, ("human", "{q}")])
+print([f"{m.type}:{m.content}" for m in full.invoke({"q": "5+5"}).to_messages()])
+```
+```
+['system:Maths.', 'human:2+2', 'ai:4', 'human:3+3', 'ai:6', 'human:5+5']
+```
+
+---
+
+## ৬.৬ ধাপ ৪ — Output Parser (মডেলের উত্তরকে কাজের আকারে আনা)
+
+মডেল সবসময় **লেখা** ফেরত দেয়। কিন্তু প্রোগ্রামের দরকার হতে পারে একটা তালিকা, একটা JSON, বা একটা অবজেক্ট।
+Parser এই রূপান্তর করে।
+
+```python
+from langchain_core.output_parsers import (CommaSeparatedListOutputParser, JsonOutputParser,
+                                           PydanticOutputParser, StrOutputParser)
+from pydantic import BaseModel, Field
+
+print("str   ->", repr(StrOutputParser().invoke(AIMessage("plain text"))))
+print("list  ->", CommaSeparatedListOutputParser().invoke(AIMessage("a, b, c")))
+print("json  ->", JsonOutputParser().invoke(AIMessage('{"price": 2500, "plan": "Growth"}')))
+
+class Plan(BaseModel):
+    name: str = Field(description="plan name")
+    price: int
+
+obj = PydanticOutputParser(pydantic_object=Plan).invoke(AIMessage('{"name": "Growth", "price": 2500}'))
+print("pydantic ->", obj, "| type:", type(obj).__name__)
+```
+```
+str   -> 'plain text'
+list  -> ['a', 'b', 'c']
+json  -> {'price': 2500, 'plan': 'Growth'}
+pydantic -> name='Growth' price=2500 | type: Plan
+```
+
+| Parser | ফেরত দেয় | কখন |
+|---|---|---|
+| `StrOutputParser` | সাধারণ `str` | সবচেয়ে বেশি ব্যবহৃত (AIMessage থেকে শুধু লেখা বের করে) |
+| `CommaSeparatedListOutputParser` | `list[str]` | "কমা দিয়ে লিখো" ধরনের কাজ |
+| `JsonOutputParser` | `dict` | মডেল JSON লিখলে |
+| `PydanticOutputParser` | আপনার নিজের ক্লাসের অবজেক্ট (টাইপ-চেক সহ) | কাঠামো ঠিকঠাক চাইলে |
+
+**বড় সতর্কতা:** Parser শুধু মডেলের লেখা **পড়ে।** মডেল ভুল JSON লিখলে parser error দেবে — ঠিক করে দেবে না।
+ছোট মডেলে (৪B, ১.৭B) এটা প্রায়ই হয়। তাই "structured output" (মডেলকেই কাঠামো মানতে বাধ্য করা) আলাদা জিনিস — ৬.২০-এ আসল
+মডেলে চালিয়ে দেখব সেটা ছোট মডেলে কতটা ভরসাযোগ্য।
+
+**এই প্রজেক্টে:** আমরা কোনো Parser ব্যবহার করি না। আমাদের উত্তর সাধারণ লেখা, আর citation `[ফাইলের-নাম.md]` আমরা
+নিজের regex দিয়ে বের করি (`engine.py`-এর `_CITE_MARKER`)।
+
+---
+
+## ৬.৭ ধাপ ৫ — LCEL: `|` চিহ্ন দিয়ে ধাপ জোড়া (LangChain-এর প্রাণ)
+
+**LCEL** = LangChain Expression Language। নামটা ভয় পাওয়ার মতো, ধারণাটা খুব সোজা: **`|` চিহ্ন দিয়ে জিনিস জোড়া লাগান।**
+
+```python
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+
+prompt = ChatPromptTemplate.from_messages([("human", "Say hi to {name}")])
+model = FakeListChatModel(responses=["Hi Rahim!"])
+chain = prompt | model | StrOutputParser()
+print(type(chain).__name__, "->", chain.invoke({"name": "Rahim"}))
+print("steps:", [type(s).__name__ for s in chain.steps])
+```
+```
+RunnableSequence -> Hi Rahim!
+steps: ['ChatPromptTemplate', 'FakeListChatModel', 'StrOutputParser']
+```
+
+`prompt | model | parser` মানে: **prompt-এর আউটপুট → model-এর ইনপুট; model-এর আউটপুট → parser-এর ইনপুট।**
+যেন কারখানার কনভেয়ার বেল্ট।
+
+### মূল ধারণা: সবকিছুই একটা `Runnable`
+
+Prompt, model, parser, retriever, tool, এমনকি আপনার নিজের ফাংশন — **সবার একই মেথড আছে।** এটাই LCEL-এর জাদু:
+সবাই একই "প্লাগ" মানে, তাই যেকোনোটা যেকোনোটার পাশে জোড়া যায়।
+
+```python
+from langchain_core.runnables import RunnableLambda
+sq = RunnableLambda(lambda x: x * x)
+print("invoke :", sq.invoke(4))
+print("batch  :", sq.batch([1, 2, 3]))
+print("stream :", list(sq.stream(5)))
+print("ainvoke:", asyncio.run(sq.ainvoke(6)))
+print("a plain function becomes a Runnable by the | operator:", (sq | (lambda x: x + 1)).invoke(3))
+```
+```
+invoke : 16
+batch  : [1, 4, 9]
+stream : [25]
+ainvoke: 36
+a plain function becomes a Runnable by the | operator: 10
+```
+
+### যন্ত্রাংশ ১: `RunnableParallel` — একসাথে অনেকগুলো চালানো
+
+```python
+from langchain_core.runnables import RunnableParallel
+import threading
+gate = threading.Barrier(3, timeout=3)      # ৩টা thread একসাথে না এলে খোলে না
+def meet(tag):
+    def run(x):
+        gate.wait()
+        return f"{tag}({x})"
+    return RunnableLambda(run)
+print(RunnableParallel(a=meet("A"), b=meet("B"), c=meet("C")).invoke("q"))
+```
+```
+{'a': 'A(q)', 'b': 'B(q)', 'c': 'C(q)'} <- all 3 reached the barrier together: they truly ran at the same time
+```
+আর পরপর (chain দিয়ে) চালালে:
+```
+one after another -> BrokenBarrierError: nobody else arrives (so a chain is sequential)
+```
+
+> **এখানে ঘড়ি (stopwatch) ব্যবহার করিনি কেন?** প্রথমে করেছিলাম। একই কোড কখনো ০.৩১ সেকেন্ড, কখনো ১.০৪ সেকেন্ড
+> দিয়েছে — কারণ তখন কম্পিউটারে আরেকটা ভারী কাজ চলছিল। সময়-মাপা প্রমাণ অস্থির। তাই এমন একটা প্রমাণ বানালাম, যেটা
+> **কখনো বদলায়**না: `Barrier` শুধু তখনই খোলে যখন তিনটা একসাথে হাজির। (এটাও একটা শিক্ষা: *কোনো জিনিস মাপার
+> আগে নিশ্চিত হন যে মাপাটা নির্ভরযোগ্য।*)
+
+**কোথায় লাগে:** একই প্রশ্নে BM25 আর vector search **একসাথে** চালাতে চাইলে। (এই প্রজেক্ট এগুলো পরপর চালায়।
+BM25 প্রায় ০ মিলিসেকেন্ড নেয় — `CLAUDE.md`-তে মাপা — তাই একসাথে চালিয়ে লাভ কম।)
+
+### যন্ত্রাংশ ২: `RunnablePassthrough` ও `assign` — তথ্য সামনে বয়ে নেওয়া
+
+```python
+from operator import itemgetter
+from langchain_core.runnables import RunnablePassthrough
+c = RunnablePassthrough.assign(double=lambda d: d["n"] * 2).assign(text=lambda d: f"n={d['n']}, double={d['double']}")
+print(c.invoke({"n": 7}))
+print("itemgetter picks a key:", (itemgetter("n") | sq).invoke({"n": 9}))
+```
+```
+{'n': 7, 'double': 14, 'text': 'n=7, double=14'}
+itemgetter picks a key: 81
+```
+`assign` = "আগের সব তথ্য রেখে, একটা নতুন তথ্য যোগ করো।" RAG-এ খুব কাজের (৬.১০) — ডকুমেন্টও বয়ে নেওয়া যায়, উত্তরও।
+
+### যন্ত্রাংশ ৩: `RunnableBranch` — রাস্তা বেছে নেওয়া (routing)
+
+```python
+from langchain_core.runnables import RunnableBranch
+route = RunnableBranch(
+    (lambda d: "refund" in d["q"].lower(), RunnableLambda(lambda d: "-> billing team")),
+    (lambda d: "error" in d["q"].lower(),  RunnableLambda(lambda d: "-> support engineer")),
+    RunnableLambda(lambda d: "-> general assistant"))      # শেষেরটা "বাকি সব"
+for q in ("I want a refund", "got error ND-1042", "hello"):
+    print(f"{q!r:24}", route.invoke({"q": q}))
+```
+```
+'I want a refund'        -> billing team
+'got error ND-1042'      -> support engineer
+'hello'                  -> general assistant
+```
+
+### যন্ত্রাংশ ৪: retry আর fallback — ব্যর্থতা সামলানো
+
+```python
+calls = {"n": 0}
+def flaky(x):
+    calls["n"] += 1
+    if calls["n"] < 3:
+        raise ConnectionError("Ollama busy")
+    return f"ok after {calls['n']} tries"
+print("retry   :", RunnableLambda(flaky).with_retry(stop_after_attempt=4, wait_exponential_jitter=False).invoke(1))
+broken = RunnableLambda(lambda x: 1 / 0)
+backup = RunnableLambda(lambda x: "fallback answer")
+print("fallback:", broken.with_fallbacks([backup]).invoke(1))
+```
+```
+retry   : ok after 3 tries
+fallback: fallback answer
+```
+- **retry** = ব্যর্থ হলে আবার চেষ্টা। **fallback** = একটা ব্যর্থ হলে বিকল্পটা চালাও।
+- ⚠️ **সাবধান (এই প্রজেক্টের শিক্ষা):** timeout-এ retry করবেন না। একটা কল ৬০ সেকেন্ড নেয়; অন্ধভাবে retry মানে ২ মিনিট অপেক্ষা,
+  অথচ সমস্যাটা একই থাকবে। আমাদের `llm.py` ঠিক এভাবে — timeout-এ retry নয়, শুধু "সংযোগ প্রত্যাখ্যাত" হলে একবার।
+
+### যন্ত্রাংশ ৫: একসাথে কতগুলো? `max_concurrency`
+
+```python
+from langchain_core.runnables import RunnableConfig
+for limit in (1, 3):
+    state.update(now=0, peak=0)
+    RunnableLambda(tracked).batch(list(range(8)), config=RunnableConfig(max_concurrency=limit))
+    print(f"8 jobs, max_concurrency={limit} -> at most {state['peak']} ran at once")
+```
+```
+8 jobs, max_concurrency=1 -> at most 1 ran at once
+8 jobs, max_concurrency=3 -> at most 3 ran at once
+```
+
+> **এই প্রজেক্টে এটা কেন গুরুত্বপূর্ণ:** আমাদের Ollama `NUM_PARALLEL=1` — একসাথে একটাই প্রশ্ন। তাই `max_concurrency=1`
+> না দিলে `batch` সবগুলো একসাথে ছুড়ে মারবে, আর সার্ভার "busy" দেবে। (আজকের `requests.log`-এ ৮৮টা "busy" উত্তর ছিল —
+> একটা একটা-slot-এর সার্ভারে একসাথে একাধিক অনুরোধ এলে এটাই হয়। কে পাঠিয়েছিল, সেটা আমি যাচাই করিনি।)
+
+### যন্ত্রাংশ ৬: Streaming চেইনের ভেতর দিয়ে বয়ে যায়
+
+```python
+streamer = ChatPromptTemplate.from_messages([("human", "{q}")]) | FakeListChatModel(responses=["Hello world"]) | StrOutputParser()
+print([c for c in streamer.stream({"q": "x"})])
+```
+```
+['H', 'e', 'l', 'l', 'o', ' ', 'w', 'o', 'r', 'l', 'd']
+```
+চেইনের শেষে parser থাকলেও টুকরো টুকরো করেই আসে — এই জিনিসটাই চ্যাট UI-তে "শব্দ একটা একটা করে ফুটে ওঠা" সম্ভব করে।
+
+### যন্ত্রাংশ ৭: `astream_events` — প্রতিটা ধাপের খবর (UI-এর জন্য)
+
+```python
+async def events():
+    seen = []
+    async for ev in streamer.astream_events({"q": "x"}, version="v2"):
+        seen.append(ev["event"] + ":" + ev["name"])
+    return seen
+ev = asyncio.run(events())
+print(len(ev), "events, e.g.:", [e for e in ev if "chat_model" in e or "prompt" in e.lower()][:4])
+```
+```
+41 events, e.g.: ['on_prompt_start:ChatPromptTemplate', 'on_prompt_end:ChatPromptTemplate', 'on_chat_model_start:FakeListChatModel', 'on_chat_model_stream:FakeListChatModel']
+```
+এটা অনেকটা এই প্রজেক্টের `trace` ইভেন্টের মতো — প্রতিটা ধাপ শুরু/শেষের খবর। (তুলনা: আমাদের Pipeline পেজ ১৭টা ধাপ দেখায়
+**নিজের বানানো** ইভেন্ট দিয়ে; LangChain-এর ইভেন্ট শুধু LangChain-এর ভেতরের ধাপ দেখে।)
+
+### যন্ত্রাংশ ৮: চেইনের নকশা দেখা
+
+```python
+chain.get_graph().print_ascii()      # ⚠️ আলাদা প্যাকেজ লাগে: pip install grandalf
+```
+```
+     +-------------+
+     | PromptInput |
+     +-------------+
+            *
+     +--------------------+
+     | ChatPromptTemplate |
+     +--------------------+
+            *
+     +-------------------+
+     | FakeListChatModel |
+     +-------------------+
+            *
+     +-----------------+
+     | StrOutputParser |
+     +-----------------+
+            *
+     +-----------------------+
+     | StrOutputParserOutput |
+     +-----------------------+
+```
+(মাঝের `*` রেখাগুলো ছোট করে দেখানো হয়েছে।) `grandalf` ছাড়া চালালে `ImportError: Install grandalf to draw graphs` আসে — আমি নিজে এটা পেয়েছি।
+
+### কখন LCEL ব্যবহার করবেন **না** (সৎ পরামর্শ)
+
+- ধাপগুলো **বাছ-বিচার করে** (if/else, loop) চলে? তাহলে সাধারণ Python `if`/`for` বেশি পরিষ্কার। জটিল হলে **LangGraph** (৬.১৪)।
+- `|` চেইন ভাঙলে error-এর জায়গা খুঁজে পাওয়া কঠিন হতে পারে। ছোট ছোট চেইন বানান, প্রতিটা আলাদা টেস্ট করুন।
+- আমাদের এই প্রজেক্টের মূল pipeline (১৭ ধাপ) LCEL দিয়ে **লেখা হয়নি** — কারণ প্রতিটা ধাপের ভেতরের কাঁচা তথ্য ও সময়
+  Pipeline পেজে দেখাতে হয়, আর সাধারণ Python ফাংশনে সেটা সোজা।
+
+---
+
+## ৬.৮ ধাপ ৬ — ডকুমেন্ট, টুকরো করা, Embedding, Vector Store
+
+RAG-এর (৩.৫) যন্ত্রাংশ। এই প্রজেক্টে এগুলো **হাতে লেখা** (`src/ingest`, `src/index`)। LangChain-এ প্রতিটার তৈরি সংস্করণ আছে।
+
+### `Document` = লেখা + তথ্য (metadata)
+
+```python
+from langchain_core.documents import Document
+d = Document(page_content="Annual leave is 18 days.", metadata={"source": "handbook.md", "section": "Leave"})
+print(d.page_content, "|", d.metadata)
+```
+```
+Annual leave is 18 days. | {'source': 'handbook.md', 'section': 'Leave'}
+```
+`metadata` একটা **খোলা ডিকশনারি** — যা খুশি রাখা যায় (ফাইলের নাম, শিরোনাম, স্কোর, তারিখ)। এই প্রজেক্টের `Hit` অবজেক্টের সমতুল্য।
+
+### টুকরো করা (splitting)
+
+```python
+from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
+md = MarkdownHeaderTextSplitter(headers_to_split_on=[("#", "section")]).split_text(TEXT)
+print("by heading:", [(x.metadata["section"], len(x.page_content)) for x in md])
+rc = RecursiveCharacterTextSplitter(chunk_size=60, chunk_overlap=10).split_text(TEXT)
+print(f"by size (60 chars, overlap 10): {len(rc)} chunks; first two:", [c.replace(chr(10), ' / ') for c in rc[:2]])
+```
+```
+by heading: [('Leave', 66), ('Remote work', 60), ('Notice', 45)]
+by size (60 chars, overlap 10): 7 chunks; first two: ['# Leave', 'Annual leave is 18 days. Apply at least 3 working days in']
+```
+**ফল দেখুন:** আকার ধরে (৬০ অক্ষর) কাটলে প্রথম টুকরো শুধু `# Leave` — শিরোনাম একা পড়ে গেছে, বাক্য মাঝপথে কাটা। শিরোনাম ধরে
+কাটলে প্রতিটা টুকরো একটা পূর্ণ অংশ। **এজন্যই এই প্রজেক্ট নিজের chunker লিখেছে** — "টেবিল কখনো কাটা যাবে না" আর "প্রতিটা টুকরো
+নিজের শিরোনাম বয়ে নেবে" (ধাপ ০.৩) — এই নিয়ম আকার-ভিত্তিক কাটা দিয়ে হয় না।
+
+### Embedding আর Vector Store
+
+```python
+from langchain_core.embeddings import DeterministicFakeEmbedding
+from langchain_core.vectorstores import InMemoryVectorStore
+
+emb = DeterministicFakeEmbedding(size=16)         # আসল জীবনে: OllamaEmbeddings(model="bge-m3")
+store = InMemoryVectorStore(embedding=emb)
+store.add_documents(md)
+hits = store.similarity_search_with_score("Annual leave is 18 days. Apply at least 3 working days in advance.", k=2)
+print("nearest:", [(h.metadata["section"], round(s, 3)) for h, s in hits])
+retr = store.as_retriever(search_kwargs={"k": 2})
+print("as_retriever -> a Runnable:", type(retr).__name__, "| .invoke gives", len(retr.invoke("x")), "Documents")
+```
+```
+nearest: [('Leave', 1.0), ('Remote work', 0.141)]  (fake vectors: only an EXACT text matches strongly)
+as_retriever -> a Runnable: VectorStoreRetriever | .invoke gives 2 Documents
+```
+- `DeterministicFakeEmbedding` = নকল embedding (টেস্টের জন্য): **একই লেখা → একই সংখ্যা**, কিন্তু "মানে" বোঝে না। তাই শুধু **হুবহু একই** লেখা কাছাকাছি আসে।
+  আসল মানে বোঝার জন্য `OllamaEmbeddings(model="bge-m3")` লাগবে (৬.২০)।
+- `InMemoryVectorStore` = মেমোরিতে রাখা (প্রোগ্রাম বন্ধ হলে শেষ)। এই প্রজেক্ট **Qdrant** ব্যবহার করে (ফাইলে সংরক্ষিত)। LangChain-এ Qdrant-এর জন্য আলাদা integration আছে (⚠️ ইনস্টল করে চালিয়ে দেখা হয়নি)।
+- **একটা বিষয়ে সতর্ক:** আউটপুটে সংখ্যাগুলো `np.float64(0.084)` ছাপা হয় (NumPy-র রূপ) — ঘাবড়াবেন না, এগুলো সাধারণ দশমিক সংখ্যা।
+
+---
+
+## ৬.৯ ধাপ ৭ — Retriever (খুঁজে-আনা যন্ত্র)
+
+**Retriever** = একটা প্রশ্ন নিয়ে `Document`-এর তালিকা ফেরত দেয়। এটা একটা `Runnable`, তাই `|` দিয়ে জোড়া যায়।
+
+### নিজের খোঁজা-কোডকে LangChain-এর retriever বানানো
+
+```python
+from langchain_core.callbacks import CallbackManagerForRetrieverRun
+from langchain_core.retrievers import BaseRetriever
+from rank_bm25 import BM25Okapi
+import re
+
+class KeywordRetriever(BaseRetriever):
+    docs: list[Document]
+    k: int = 2
+    def _get_relevant_documents(self, query: str, *, run_manager: CallbackManagerForRetrieverRun) -> list[Document]:
+        tok = lambda s: re.findall(r"\w+", s.lower())
+        bm = BM25Okapi([tok(x.page_content) for x in self.docs])
+        scores = bm.get_scores(tok(query))
+        order = sorted(range(len(self.docs)), key=lambda i: -scores[i])[: self.k]
+        return [Document(page_content=self.docs[i].page_content,
+                         metadata={**self.docs[i].metadata, "bm25_score": round(float(scores[i]), 3), "rank": r + 1})
+                for r, i in enumerate(order)]
+
+kw = KeywordRetriever(docs=md)
+for h in kw.invoke("how many days notice"):
+    print(" ", h.metadata, "|", h.page_content[:40])
+```
+```
+  {'section': 'Notice', 'bm25_score': 0.73, 'rank': 1} | Confirmed employees must give 60 days no
+  {'section': 'Leave', 'bm25_score': 0.142, 'rank': 2} | Annual leave is 18 days. Apply at least 
+```
+
+**এখান থেকে দুটো জিনিস শিখুন:**
+
+1. যেকোনো খোঁজা-কোডকে `BaseRetriever`-এর ছাঁচে ফেললে সে LangChain-এর বাকি সবকিছুর সাথে জোড়া যায়।
+2. **প্রতি-টুকরোর সংখ্যা (স্কোর, rank) `metadata`-তে যেতে পারে** — উপরে `bm25_score` আর `rank` দেখুন।
+
+### তাহলে এই প্রজেক্টের খোঁজা কেন LangChain দিয়ে করা হয়নি?
+
+> ✏️ **সংশোধনী (সৎ কথা):** প্রথমে আমি বলেছিলাম "LangChain-এর retriever-এ স্কোর বহন করার জায়গাই নেই।" এটা **ভুল ছিল।**
+> উপরের উদাহরণই প্রমাণ — `metadata`-তে স্কোর যায়। আসল কারণ আরেকটু সূক্ষ্ম।
+
+Retriever ফেরত দেয় **শুধু `Document`-এর তালিকা।** আমাদের Pipeline পেজ কিন্তু এমন কিছু দেখায় যা **কোনো একটা টুকরোর ব্যাপার নয়:**
+
+| Pipeline যা দেখায় | কোনো এক টুকরোর তথ্য? |
+|---|---|
+| BM25-র প্রতিটা hit-এর স্কোর | ✅ হ্যাঁ — `metadata`-তে যেত |
+| RRF-এ প্রতিটার rank | ✅ হ্যাঁ |
+| প্রশ্ন ভেঙে কোন কোন token হলো | ❌ না — প্রশ্নের তথ্য |
+| embedding-এর প্রথম ৮টা সংখ্যা ও দৈর্ঘ্য | ❌ না |
+| shortlist-এ কেন এই ১২টা (সংরক্ষিত আসনের নিয়ম) | ❌ না — সিদ্ধান্তের তথ্য |
+| relevance floor-এর রায় (০.০৮৮-এর উপরে/নিচে) | ❌ না |
+| প্রতিটা ধাপের মিলিসেকেন্ড | ❌ না |
+
+এগুলো retriever-এর রিটার্ন-ভ্যালুতে রাখার জায়গা নেই। রাখতে হলে **retriever-কে ঘুরে** অন্য পথে (যেমন callback দিয়ে) বের করতে হতো।
+তখন আমরা LangChain-কে খুশি করতে নিজের কোড বাঁকাতাম — আর লাভ কিছু নেই। তাই খোঁজা নিজের কোডেই থাকল।
+
+### Hybrid search: `EnsembleRetriever`
+
+দুটো retriever জুড়ে (এই প্রজেক্ট যেমন BM25 + vector জোড়ে):
+
+```python
+from langchain_classic.retrievers import EnsembleRetriever
+sem = store.as_retriever(search_kwargs={"k": 3})
+hybrid = EnsembleRetriever(retrievers=[kw, sem], weights=[0.5, 0.5])
+print("hybrid returned:", [h.metadata.get("section") for h in hybrid.invoke("how many days notice")])
+```
+```
+hybrid returned: ['Notice', 'Leave', 'Remote work']
+```
+এটা **weighted reciprocal-rank fusion** — আমাদের `rrf.py`-র কাছাকাছি ধারণা। পার্থক্য: আমাদের RRF-এর পরে আছে **exact-code boost,
+সংরক্ষিত আসন, rerank, পুরোনো-পলিসি নামানো, floor** — এগুলো `EnsembleRetriever`-এ নেই। (আর `langchain-classic` — নামেই বোঝা যায়, এটা পুরোনো-ধাঁচের অংশ।)
+
+> ⚠️ **যাচাই করা হয়নি:** Contextual compression, MultiQuery retriever, reranker integration (Cohere ইত্যাদি) — নাম জানা আছে, কিন্তু এই গাইডের জন্য চালিয়ে দেখা হয়নি।
+
+---
+
+## ৬.১০ ধাপ ৮ — নিজে একটা RAG চেইন বানানো
+
+### ক্লাসিক RAG চেইন
+
+```python
+def fmt(docs):
+    return "\n\n".join(f"<document section='{d.metadata.get('section')}'>\n{d.page_content}\n</document>" for d in docs)
+
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "Answer only from the documents."),
+    ("human", "{context}\n\nQuestion: {question}")])
+fake = FakeListChatModel(responses=["Confirmed employees give 60 days notice."])
+rag = {"context": kw | fmt, "question": RunnablePassthrough()} | prompt | fake | StrOutputParser()
+print(rag.invoke("how many days notice"))
+```
+```
+Confirmed employees give 60 days notice.
+```
+**পড়ুন ডান থেকে বাঁয়ে:** প্রশ্ন আসে → একসাথে দুটো কাজ (`context`: খুঁজে `fmt` দিয়ে সাজানো; `question`: প্রশ্ন যেমন ছিল) →
+`prompt`-এ ঢোকে → মডেল → `StrOutputParser`। **মাত্র ৫ লাইনের মূল কাজ।**
+
+### উত্তরের সাথে উৎসও ফেরত পাওয়া (citation দেখানোর জন্য)
+
+```python
+rag2 = (RunnablePassthrough.assign(docs=lambda x: kw.invoke(x["question"]))
+        .assign(answer=lambda x: (prompt | fake | StrOutputParser()).invoke({"context": fmt(x["docs"]), "question": x["question"]})))
+out = rag2.invoke({"question": "how many days notice"})
+print("answer :", out["answer"])
+print("sources:", [d.metadata["section"] for d in out["docs"]])
+```
+```
+answer : Confirmed employees give 60 days notice.
+sources: ['Notice', 'Leave']
+```
+
+### ফলো-আপ প্রশ্ন সোজা করা (history-aware rewrite)
+
+এই প্রজেক্টের `rewrite.py` যা করে, LangChain-এ তার সমতুল্য:
+
+```python
+rewriter = (ChatPromptTemplate.from_messages([
+    ("system", "Rewrite the follow-up as one standalone question."),
+    ("human", "Conversation:\n{history}\nFollow-up: {question}\nRewritten:")])
+    | FakeListChatModel(responses=["How many annual leave days can be carried forward?"]) | StrOutputParser())
+print(rewriter.invoke({"history": "User: How many days of annual leave?\nAssistant: 18.", "question": "Can I carry some forward?"}))
+```
+```
+How many annual leave days can be carried forward?
+```
+(এখানে মডেল নকল, তাই উত্তরটা আগে থেকে লেখা। আসল মডেলে একই কাজ ৬.২০-এ।)
+
+### এই প্রজেক্টের সাথে সৎ তুলনা
+
+| | LangChain-এ ন্যূনতম RAG | এই প্রজেক্ট |
+|---|---|---|
+| খোঁজা ও উত্তরের মূল কাজ | প্রায় ২০ লাইন (retriever + চেইন: `c03_rag.py`-র ৪ ও ৬ নম্বর অংশ) | `src/retrieve` ৪৭২ + `src/index` ৪৪৪ + `src/chat` ১,৭৫১ লাইন |
+| ডকুমেন্ট পড়া ও টুকরো করা | `RecursiveCharacterTextSplitter` | `src/ingest` ৮৫১ লাইন |
+| টেবিল কাটা যাবে না | ❌ নেই | ✅ |
+| পুরোনো (SUPERSEDED) পলিসি নামানো | ❌ নেই | ✅ |
+| prompt injection ছেঁকে ফেলা | ❌ নেই | ✅ |
+| exact-code (`ND-1042`) জোর করে তোলা | ❌ নেই | ✅ |
+| বাংলা অঙ্ক folding | ❌ নেই | ✅ |
+| relevance floor ("জানি না" বলা) | ❌ নেই | ✅ |
+| প্রতিটা ধাপের কাঁচা তথ্য (Pipeline) | ❌ নেই | ✅ |
+
+> **এটা লাইন গোনার প্রতিযোগিতা নয়, আর অন্যায্যও।** ২০ লাইনের RAG একটা *খেলনা* — সে ডকুমেন্টের ফাঁদগুলো সামলায় না।
+> আমাদের কোড বড়, কারণ ডকুমেন্টগুলো ইচ্ছা করে ফাঁদে-ভরা। LangChain-এর পক্ষে বা বিপক্ষে এটা প্রমাণ নয়; শুধু দেখায়
+> **"কাজ করে" আর "ভরসা করা যায়"-র মাঝখানের দূরত্ব** কতটা।
+
+---
+
+## ৬.১১ ধাপ ৯ — Memory (স্মৃতি): তিনটা পথ (এখানে একটা ফাঁদ আছে)
+
+মনে করুন (১.৪): **মডেল কিছু মনে রাখে না।** তাই প্রতিবার আগের কথোপকথন আবার পাঠাতে হয়। এটা করার তিনটা পথ।
+
+### পথ ক — হাতে (এই প্রজেক্ট যা করে)
+
+`src/chat/memory.py`: কথোপকথন একটা তালিকায় রাখা, প্রতিবার শেষ ৬টা turn কেটে নিয়ে prompt-এর সামনে বসানো, আর JSON ফাইলে সংরক্ষণ।
+**একজন ব্যবহারকারীর জন্য এটাই যথেষ্ট ও সবচেয়ে পরিষ্কার।**
+
+### পথ খ — ⚠️ পুরোনো পথ: `RunnableWithMessageHistory` (DEPRECATED)
+
+পুরোনো প্রায় সব টিউটোরিয়ালে এটাই শেখানো হয়। আমি চালিয়ে দেখলাম এটা কাজ করে:
+
+```
+turn 1 -> 18 days.
+turn 2 -> Up to 5 days.
+the model saw on turn 2: ['system:You are helpful.', 'human:How many leave days?', 'ai:18 days.', 'human:Can I carry some forward?']
+another user (new session) has an empty memory: 0 messages
+```
+**কিন্তু** চালানোর সময় LangChain নিজেই সতর্কবার্তা দিল:
+
+```
+LangChainDeprecationWarning: RunnableWithMessageHistory is deprecated. Use LangGraph's built-in persistence instead.
+The class `InMemoryChatMessageHistory` was deprecated in LangChain 1.6.4 and will be removed in 2.0.0
+```
+মানে: **এটা ২.০ ভার্সনে মুছে যাবে।** নতুন কোডে এটা ব্যবহার করবেন না। (পুরোনো কোড পড়লে চিনে নেওয়ার জন্য নামটা জানা দরকার।)
+
+### পথ গ — আধুনিক পথ: LangGraph checkpointer + `thread_id`
+
+```python
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.graph import START, MessagesState, StateGraph
+
+model = FakeListChatModel(responses=["18 days.", "Up to 5 days can be carried forward."])
+def chatbot(state: MessagesState):
+    return {"messages": [model.invoke(state["messages"])]}
+mg = StateGraph(MessagesState)
+mg.add_node("chatbot", chatbot); mg.add_edge(START, "chatbot"); mg.add_edge("chatbot", END)
+memo = mg.compile(checkpointer=InMemorySaver())
+rahim = {"configurable": {"thread_id": "rahim"}}
+memo.invoke({"messages": [("user", "How many leave days?")]}, rahim)
+r2 = memo.invoke({"messages": [("user", "Can I carry some forward?")]}, rahim)
+print("rahim's thread now holds:", [f"{m.type}:{m.content}" for m in r2["messages"]])
+print("a different thread is empty:", memo.get_state({"configurable": {"thread_id": "karim"}}).values)
+```
+```
+rahim's thread now holds: ['human:How many leave days?', 'ai:18 days.', 'human:Can I carry some forward?', 'ai:Up to 5 days can be carried forward.']
+a different thread is empty: {}
+```
+- **`thread_id`** = একটা কথোপকথনের পরিচয়-নম্বর। একই `thread_id` দিলে আগের কথা ফিরে আসে; অন্য `thread_id`-তে খালি।
+- **`InMemorySaver`** মেমোরিতে রাখে (প্রোগ্রাম বন্ধ হলে শেষ)। স্থায়ী রাখার জন্য ডেটাবেস-ভিত্তিক checkpointer আছে (⚠️ যাচাই করা হয়নি)।
+
+### স্মৃতি ছোট করা: `trim_messages`
+
+কথোপকথন লম্বা হলে context window ভরে যায় (১.৪)। কাটার নিয়ম:
+
+```python
+from langchain_core.messages import trim_messages
+hist = [HumanMessage(f"q{i}") if i % 2 == 0 else AIMessage(f"a{i}") for i in range(8)]
+kept = trim_messages(hist, max_tokens=3, token_counter=len, strategy="last", start_on="human")
+print("kept:", [m.content for m in kept])
+```
+```
+kept: ['q6', 'a7']
+```
+**ব্যাখ্যা:** `strategy="last"` = শেষের দিক রাখো। `max_tokens=3` আর `token_counter=len` মানে "সর্বোচ্চ ৩টা *বার্তা*।" শেষ তিনটা ছিল `a5, q6, a7`।
+কিন্তু `start_on="human"` বলেছে — রাখা অংশ **মানুষের বার্তা দিয়ে শুরু** হতে হবে। তাই `a5` বাদ, বাকি `q6, a7`। (এই প্রজেক্টের `Conversation.window()`
+ঠিক একই নিয়ম মানে: "N-তম শেষের *user* বার্তা থেকে কাটো" — যাতে উত্তর দিয়ে শুরু না হয়।)
+
+> ⚠️ **যাচাই করা হয়নি:** "সারাংশ-স্মৃতি" (পুরোনো কথা সংক্ষেপ করে রাখা) — ধারণাটা সত্যিকারের, কিন্তু এই গাইডের জন্য চালানো হয়নি।
+
+---
+
+## ৬.১২ ধাপ ১০ — Tools (যন্ত্র): মডেল "অনুরোধ" করে, আপনি চালান
+
+আগে ৩.২ পড়ে থাকলে মনে আছে: এই প্রজেক্টে tool নেই। এখানে শিখব tool জিনিসটা আসলে কী।
+
+### মূল কথা (প্রায় সবাই ভুল বোঝে)
+
+**মডেল নিজে কোনো ফাংশন চালায় না।** সে শুধু লেখে: *"দয়া করে `add_days` ফাংশনটা এই ইনপুট দিয়ে চালান।"* **চালান আপনার কোড।**
+তারপর ফলটা মডেলকে ফেরত দিতে হয়, মডেল তখন চূড়ান্ত উত্তর লেখে।
+
+```python
+from langchain_core.tools import tool
+
+@tool
+def add_days(start_day: int, days: int) -> int:
+    """Add a number of days to a start day-of-month."""
+    return start_day + days
+print("name       :", add_days.name)
+print("description:", add_days.description)
+print("arguments  :", add_days.args)
+print("run it     :", add_days.invoke({"start_day": 10, "days": 5}))
+```
+```
+name       : add_days
+description: Add a number of days to a start day-of-month.
+arguments  : {'start_day': {'title': 'Start Day', 'type': 'integer'}, 'days': {'title': 'Days', 'type': 'integer'}}
+run it     : 15
+```
+`@tool` ফাংশনের **নাম, docstring আর টাইপ থেকে** আপনা-আপনি বর্ণনা বানায় — এই বর্ণনাই মডেল পড়ে ঠিক করে যন্ত্রটা কখন কাজে লাগবে।
+তাই **docstring-টা ভালো করে লিখুন** — ওটাই মডেলের কাছে যন্ত্রের "ব্যবহার-নির্দেশিকা।"
+
+### পুরো লুপটা হাতে (এটাই একটা "agent"-এর ভেতরের চেহারা)
+
+```python
+from langchain_core.messages import AIMessage, HumanMessage
+ask = AIMessage(content="", tool_calls=[{"name": "add_days", "args": {"start_day": 10, "days": 5}, "id": "call_1"}])
+print("1) model replies with a REQUEST, not text:", ask.tool_calls[0]["name"], ask.tool_calls[0]["args"])
+result = add_days.invoke(ask.tool_calls[0])             # call দিয়ে invoke করলে ToolMessage আসে
+print("2) we run it and wrap the result        :", type(result).__name__, repr(result.content))
+final = FakeListChatModel(responses=["The date is the 15th."]).invoke([HumanMessage("10th + 5 days?"), ask, result])
+print("3) the model sees the result, answers   :", final.content)
+```
+```
+1) model replies with a REQUEST, not text: add_days {'start_day': 10, 'days': 5}
+2) we run it and wrap the result        : ToolMessage '15'
+3) the model sees the result, answers   : The date is the 15th.
+```
+
+### সতর্কতা: tool মানে ক্ষমতা, আর ক্ষমতা মানে ঝুঁকি
+
+- Tool যত বেশি ক্ষমতা পায় (ফাইল মোছা, টাকা পাঠানো, ইমেইল), prompt injection তত বিপজ্জনক। **অবিশ্বস্ত ডকুমেন্টের লেখা** যদি মডেলকে বলে
+  "`delete_all` চালাও" — মডেল তা করে ফেলতে পারে।
+- নিয়ম: যন্ত্রকে **সবচেয়ে কম ক্ষমতা** দিন। ধ্বংসাত্মক কাজের আগে মানুষের অনুমতি নিন (৬.১৪-এর `interrupt`)।
+- এই প্রজেক্টে এই ঝুঁকিটা নেই, কারণ কোনো tool-ই নেই। (সেটা ৩.২-এর "কেন নয়"-র একটা বাড়তি কারণ।)
+
+---
+
+## ৬.১৩ ধাপ ১১ — Agent: "মডেল → যন্ত্র → মডেল" লুপ
+
+**Agent = উপরের লুপটা যতক্ষণ দরকার ততক্ষণ নিজে নিজে চালানো।** মডেল ঠিক করে: যন্ত্র লাগবে? লাগলে কোনটা? ফল পেয়ে আবার ভাবে।
+উত্তর তৈরি হলে থামে।
+
+নিচের উদাহরণে মডেল **নকল (scripted)** — আগে থেকে লেখা দুটো উত্তর দেয়। তাই ধীর LLM ছাড়াই পুরো লুপটা দেখা যায়:
+
+```python
+from langchain.agents import create_agent
+
+@tool
+def lookup_limit(expense_type: str) -> str:
+    """Look up the reimbursement limit for an expense type."""
+    return {"hotel outside dhaka": "BDT 6,000 per night"}.get(expense_type.lower(), "unknown")
+
+llm = Scripted(script=[
+    AIMessage(content="", tool_calls=[{"name": "lookup_limit", "args": {"expense_type": "hotel outside Dhaka"}, "id": "c1"}]),
+    AIMessage(content="The hotel limit outside Dhaka is BDT 6,000 per night."),
+])
+agent = create_agent(model=llm, tools=[lookup_limit], system_prompt="Answer using the tools.")
+res = agent.invoke({"messages": [("user", "What is the hotel limit outside Dhaka?")]})
+for m in res["messages"]:
+    extra = f"  tool_calls={[c['name'] for c in m.tool_calls]}" if getattr(m, "tool_calls", None) else ""
+    print(f"  {m.type:5s} {str(m.content)[:60]!r}{extra}")
+print("the agent graph itself:", [n for n in agent.get_graph().nodes])
+```
+```
+  human 'What is the hotel limit outside Dhaka?'
+  ai    ''  tool_calls=['lookup_limit']
+  tool  'BDT 6,000 per night'
+  ai    'The hotel limit outside Dhaka is BDT 6,000 per night.'
+the agent graph itself: ['__start__', 'model', 'tools', '__end__']
+```
+**চারটা বার্তাই আলাদা করে পড়ুন:** (১) মানুষ প্রশ্ন করল → (২) মডেল উত্তর দিল না, **যন্ত্র চালানোর অনুরোধ** করল → (৩) যন্ত্র চলল, ফল এল →
+(৪) মডেল ফল দেখে চূড়ান্ত উত্তর লিখল। আর agent-টা ভেতরে আসলে একটা **গ্রাফ**: `model` ↔ `tools` (পরের ধাপে দেখব)।
+
+**⚠️ যাচাই করা হয়নি:** `create_agent`-এর **middleware** (লুপের ভেতরে নিজের কোড বসানো), `response_format` (কাঠামোবদ্ধ উত্তর), আর আসল tool-calling মডেলে
+(যেমন `qwen3:4b`) এটা কতটা ভরসাযোগ্য — শেষটা ৬.২০-এ চালিয়ে দেখব।
+
+### কেন এই প্রজেক্টে agent নেই (আবারও, সংখ্যা সহ)
+
+প্রতিটা মডেল-কলে ডকুমেন্ট পড়তেই (prefill) মিডিয়ান ~৩৬ সেকেন্ড (এই মেশিনে)। Agent লুপে **কমপক্ষে দুটো কল** (যন্ত্র চাওয়া + চূড়ান্ত উত্তর)।
+মানে উত্তরের সময় প্রায় দ্বিগুণ — আর সিদ্ধান্ত নেওয়া মডেলের হাতে ছাড়লে একই প্রশ্নে ভিন্ন পথ চলতে পারে, যা আমরা চাই না (ফল **একই** আসা চাই — ৩.২)।
+
+---
+
+## ৬.১৪ ধাপ ১২ — LangGraph: ধাপগুলো একটা গ্রাফ হিসেবে (প্রো-স্তরের মূল জিনিস)
+
+**LangChain-এর চেইন (`|`) সোজা লাইনে চলে।** কিন্তু বাস্তব কাজ প্রায়ই সোজা নয়: কখনো রাস্তা বেছে নিতে হয়, কখনো ফিরে গিয়ে আবার চেষ্টা,
+কখনো মানুষের অনুমতির জন্য থামতে হয়। এর জন্য **LangGraph** — ধাপগুলোকে **গ্রাফ (বিন্দু ও রেখা)** হিসেবে সাজানো।
+
+### তিনটা শব্দ
+
+| শব্দ | মানে | উদাহরণ |
+|---|---|---|
+| **State** (অবস্থা) | সবার হাতে-হাতে ঘোরা একটা শেয়ার-করা খাতা | `{question, route, answer}` |
+| **Node** (বিন্দু) | একটা ধাপ — একটা ফাংশন, যে খাতা পড়ে আর কিছু লিখে | `classify`, `billing` |
+| **Edge** (রেখা) | কোন ধাপের পর কোন ধাপ | `classify → billing` |
+
+### গ্রাফ বানানো: রাস্তা বেছে নেওয়া
+
+```python
+from typing import TypedDict
+from langgraph.graph import END, START, StateGraph
+
+class S(TypedDict):
+    question: str
+    route: str
+    answer: str
+
+def classify(s: S):  return {"route": "billing" if "refund" in s["question"].lower() else "general"}
+def billing(s: S):   return {"answer": "Billing team: refunds within 7 days."}
+def general(s: S):   return {"answer": "General assistant answer."}
+
+g = StateGraph(S)
+g.add_node("classify", classify); g.add_node("billing", billing); g.add_node("general", general)
+g.add_edge(START, "classify")
+g.add_conditional_edges("classify", lambda s: s["route"], {"billing": "billing", "general": "general"})
+g.add_edge("billing", END); g.add_edge("general", END)
+app = g.compile()
+print(app.invoke({"question": "How do I get a refund?"}))
+for step in app.stream({"question": "hello"}, stream_mode="updates"):
+    print("  ", step)
+```
+```
+{'question': 'How do I get a refund?', 'route': 'billing', 'answer': 'Billing team: refunds within 7 days.'}
+   {'classify': {'route': 'general'}}
+   {'general': {'answer': 'General assistant answer.'}}
+```
+- `add_conditional_edges` = "এই ধাপের পর **ফাংশনের রায় অনুযায়ী** রাস্তা বাছো।"
+- `stream_mode="updates"` = প্রতিটা ধাপ শেষ হলে **কে কী লিখল** তার খবর। (অন্য mode-ও আছে — `values`, `messages`, `debug` — ⚠️ আমি শুধু `updates` চালিয়েছি।)
+
+### গ্রাফের ছবি (যেকোনো Mermaid ভিউয়ারে পেস্ট করুন)
+
+```python
+print(app.get_graph().draw_mermaid())
+```
+```
+graph TD;
+	__start__([<p>__start__</p>]):::first
+	classify(classify)
+	billing(billing)
+	general(general)
+	__end__([<p>__end__</p>]):::last
+	__start__ --> classify;
+	classify -.-> billing;
+	classify -.-> general;
+	billing --> __end__;
+	general --> __end__;
+```
+(শুরুর কনফিগ আর শেষের রঙের লাইনগুলো বাদ দিয়ে দেখানো হয়েছে।) **এই প্রজেক্টের Architecture পেজের ছবির মতোই** — কিন্তু ওটা হাতে আঁকা, এটা কোড থেকে নিজে বের হয়।
+
+### লুপ আর reducer
+
+```python
+import operator
+from typing import Annotated
+
+class Loop(TypedDict):
+    tries: Annotated[list, operator.add]       # reducer: নতুন ভ্যালু যোগ হয়, বদলায় না
+def attempt(s: Loop):
+    return {"tries": [f"try{len(s['tries']) + 1}"]}
+lg = StateGraph(Loop)
+lg.add_node("attempt", attempt)
+lg.add_edge(START, "attempt")
+lg.add_conditional_edges("attempt", lambda s: END if len(s["tries"]) >= 3 else "attempt")
+print(lg.compile().invoke({"tries": []}))
+```
+```
+{'tries': ['try1', 'try2', 'try3']}
+```
+**Reducer** = "দুটো ভ্যালু এলে কীভাবে মেলাব?" `operator.add` মানে *যোগ করো* (তালিকা জুড়ে যায়)। না দিলে নতুন ভ্যালু **পুরোনোকে মুছে** বসে।
+লুপ: নিজের দিকেই ফিরে আসা, যতক্ষণ শর্ত পূরণ না হয় — অনন্ত লুপ এড়াতে **সবসময় থামার শর্ত** রাখুন।
+
+### Human-in-the-loop: থামো, জিজ্ঞেস করো, আবার চালাও
+
+```python
+from langgraph.types import Command, interrupt
+
+class H(TypedDict):
+    amount: int
+    result: str
+def approve(s: H):
+    ok = interrupt(f"Approve BDT {s['amount']}?")        # এখানে থেমে যায়, অবস্থা সংরক্ষিত হয়
+    return {"result": "approved" if ok == "yes" else "rejected"}
+hg = StateGraph(H); hg.add_node("approve", approve); hg.add_edge(START, "approve"); hg.add_edge("approve", END)
+hap = hg.compile(checkpointer=InMemorySaver())
+cfg = {"configurable": {"thread_id": "t1"}}
+first = hap.invoke({"amount": 30000}, cfg)
+print("paused, asking:", first["__interrupt__"][0].value)
+print("after human says yes:", hap.invoke(Command(resume="yes"), cfg))
+```
+```
+paused, asking: Approve BDT 30000?
+after human says yes: {'amount': 30000, 'result': 'approved'}
+```
+**এটা এই প্রজেক্টের জন্য একটা ভালো গল্প:** "৩০,০০০ টাকার খরচ — কে অনুমোদন করবে?" এই ধরনের কাজে মডেলের উপর ভরসা না করে মানুষকে জিজ্ঞেস করে
+তারপর এগোনো যায়। (এই প্রজেক্টে বানানো হয়নি — শুধু দেখানো যে LangGraph-এ এটা কত সোজা।) `checkpointer` লাগে কারণ থেমে থাকা অবস্থাটা কোথাও রাখতে হবে।
+
+### Multi-agent, subgraph, আরও
+
+LangGraph-এ একটা গ্রাফের ভেতরে আরেকটা গ্রাফ (subgraph), বা একাধিক agent-এর দল (supervisor ও কর্মী) বানানো যায়।
+**⚠️ এগুলো এই গাইডে চালিয়ে দেখা হয়নি** — ধারণাটা জানুন, কিন্তু কোনো কিছু প্রোডাকশনে দেওয়ার আগে অফিশিয়াল ডক দেখে নিজে চালিয়ে নিন।
+
+---
+
+## ৬.১৫ ধাপ ১৩ — Callbacks ও Observability (ভেতরে কী ঘটছে দেখা)
+
+**Observability** = চলার সময় প্রতিটা ধাপে কী ঘটছে তা দেখতে পাওয়া। AI-তে এটা প্রাণ — কারণ ভুল উত্তর এলে জানতে হবে *কোন ধাপে* গোলমাল।
+
+### Callback: প্রতিটা ঘটনার খবর নিজের কোডে ধরা (স্থানীয়, ক্লাউড ছাড়া)
+
+```python
+from langchain_core.callbacks import BaseCallbackHandler
+
+class Timeline(BaseCallbackHandler):
+    def __init__(self): self.rows = []
+    def on_chain_start(self, serialized, inputs, **kw): self.rows.append(("chain_start", (serialized or {}).get("name") or kw.get("name")))
+    def on_chat_model_start(self, serialized, messages, **kw): self.rows.append(("model_start", f"{len(messages[0])} messages"))
+    def on_llm_new_token(self, token, **kw): self.rows.append(("token", token))
+    def on_llm_end(self, response, **kw): self.rows.append(("model_end", ""))
+    def on_chain_end(self, outputs, **kw): self.rows.append(("chain_end", ""))
+
+tl = Timeline()
+simple = ChatPromptTemplate.from_messages([("human", "{q}")]) | FakeListChatModel(responses=["Hi"]) | StrOutputParser()
+list(simple.stream({"q": "x"}, config={"callbacks": [tl]}))
+print([r[0] + (":" + r[1] if r[1] else "") for r in tl.rows])
+```
+```
+['chain_start:RunnableSequence', 'chain_start:ChatPromptTemplate', 'chain_end', 'model_start:1 messages', 'token:H', 'chain_start:StrOutputParser', 'token:i', 'model_end', 'chain_end', 'chain_end']
+```
+**পড়ুন:** পুরো চেইন শুরু → prompt শুরু ও শেষ → মডেল শুরু → টোকেন `H` → parser শুরু → টোকেন `i` → মডেল শেষ → চেইন শেষ। প্রতিটা ঘটনায় আপনার ফাংশন ডাকা হয়।
+
+**এই প্রজেক্টের জন্য ধারণা:** এই callback-গুলো দিয়ে LangChain-এর ভেতরের ধাপের সময় মাপা যায় ও Pipeline পেজে দেখানো যায়। (⚠️ বানানো হয়নি — শুধু সম্ভাবনা।)
+আজকের Pipeline পেজ নিজের বানানো `trace` ইভেন্টে চলে, আর দুটো মডেল-ধাপে লেখা থাকে কোন backend চালিয়েছে (৬.১৯)।
+
+### LangSmith — এবং কেন এই প্রজেক্টে জোর করে বন্ধ
+
+**LangSmith** = LangChain কোম্পানির **ক্লাউড** সার্ভিস, যেটা প্রতিটা চেইনের প্রতিটা ধাপ রেকর্ড করে একটা ওয়েবসাইটে সুন্দর করে দেখায় (সময়, টোকেন, ইনপুট-আউটপুট)।
+
+**সমস্যা:** ওই রেকর্ডের মানে **আপনার প্রতিটা প্রশ্ন আর প্রতিটা উদ্ধার-করা ডকুমেন্টের টুকরো** একটা তৃতীয় পক্ষের সার্ভারে চলে যায়।
+এই প্রজেক্টের মূল প্রতিশ্রুতি: **কিছুই মেশিনের বাইরে যায় না।** তাই LangSmith **বন্ধ।**
+
+**কীভাবে বন্ধ — আর কেন "জোর করে":** চালু হয় পরিবেশ-চলক (environment variable) দিয়ে (`LANGSMITH_TRACING=true`)। আমাদের `lc.py` সবার আগে এগুলো `false` বসায় —
+`setdefault` নয়, **জোর করে।** কারণ: কারও shell-এ ভুলে `true` থাকলে সেটা যেন চুপচাপ ডেটা পাঠাতে না পারে। একটা টেস্ট ঠিক এটা পাহারা দেয় — shell-এ `true` রেখে
+`import lc` করে দেখে ভেতরে `false` হয়ে গেছে কিনা।
+
+> **একটা সূক্ষ্ম বিষয়:** `langsmith` প্যাকেজটা `langchain-core` ইনস্টল করলেই আপনা-আপনি আসে (আমি নিজে দেখেছি)। তাই "LangChain ইনস্টল করেছি, কিন্তু LangSmith নিইনি" —
+> এটা সত্যি নয়। প্যাকেজ আছে; শুধু **বন্ধ।** CTO জিজ্ঞেস করলে এটাই সৎ উত্তর।
+
+**⚠️ যাচাই করা হয়নি:** LangSmith-এর ওয়েব ইন্টারফেস, দাম, self-hosted সংস্করণ, ও বিকল্প ওপেন-সোর্স টুল (যেমন Langfuse) — এগুলো আমি চালাইনি।
+ডেটা বাইরে না পাঠিয়ে দেখতে চাইলে সবচেয়ে নিরাপদ পথ: নিজের callback + নিজের Pipeline পেজ (যা এই প্রজেক্টে আছে)।
+
+---
+
+## ৬.১৬ ধাপ ১৪ — Cache, Rate limit, Timeout
+
+### Cache: একই প্রশ্ন দ্বিতীয়বার এলে মডেল না ডাকা
+
+```python
+from langchain_core.caches import InMemoryCache
+from langchain_core.globals import set_llm_cache
+
+set_llm_cache(InMemoryCache())
+m = FakeListChatModel(responses=["first", "second", "third"])
+print("same question twice:", m.invoke("q1").content, "/", m.invoke("q1").content, " <- 2nd came from the cache")
+print("a different question:", m.invoke("q2").content)
+```
+```
+same question twice: first / first  <- 2nd came from the cache
+a different question: second
+```
+**শিক্ষা:** একই প্রশ্ন দুবার করলে দ্বিতীয়বার মডেল **ডাকাই হয়নি** — উত্তর মেমোরি থেকে এল (তাই `first` দুবার; নইলে `second` আসত)।
+
+> ⚠️ **এই প্রজেক্টে ভেবে ব্যবহার করুন:** আমাদের আসল ক্যাশ হলো **KV cache** (১.৫) — সম্পূর্ণ আলাদা জিনিস, মডেলের ভেতরে। LangChain-এর `InMemoryCache` পুরো উত্তর
+> মনে রাখে। কিন্তু এখানে ডকুমেন্ট বদলালে (নতুন index) পুরোনো উত্তর ভুল হয়ে যাবে। তাই ক্যাশ চালু করলে ডকুমেন্ট বদলের সময় মুছতে হবে।
+
+### Rate limit: প্রতি সেকেন্ডে সর্বোচ্চ কত কল
+
+```python
+from langchain_core.rate_limiters import InMemoryRateLimiter
+rl = InMemoryRateLimiter(requests_per_second=5, check_every_n_seconds=0.01, max_bucket_size=1)
+limited = FakeListChatModel(responses=["x"] * 4, rate_limiter=rl)
+t = time.time()
+for _ in range(4):
+    limited.invoke("q")
+dt = time.time() - t
+print(f"4 calls at 5/second took at least 0.45s? {dt >= 0.45}")
+```
+```
+4 calls at 5/second took at least 0.45s? True
+```
+(শুধু **নিচের সীমা** পরীক্ষা করেছি — "অন্তত ০.৪৫ সেকেন্ড লাগল।" ব্যস্ত কম্পিউটারে আরও বেশি লাগবে, কম নয় — তাই এটা অস্থির নয়। আগেই শিখেছি, সময়ের ওপরের-সীমা মাপলে ফল বদলায়।)
+
+### Timeout: কতক্ষণ অপেক্ষা
+
+আমাদের `lc.py`: `ChatOllama(client_kwargs={"timeout": httpx.Timeout(300, connect=5)})` — উত্তরের জন্য ৩০০ সেকেন্ড, সংযোগের জন্য ৫। Timeout পেলে আমরা `LLMTimeout` তুলি (আর **retry করি না** — ৬.৭)।
+
+---
+
+## ৬.১৭ ধাপ ১৫ — LangChain কোড টেস্ট করা
+
+আসল মডেল ধীর ও অনিশ্চিত। তাই টেস্টে **নকল** মডেল। এই প্রজেক্টের `tests/test_langchain.py` (১৬টা টেস্ট, কোনো Ollama ছাড়াই) যা যা পাহারা দেয়:
+
+| টেস্ট কী প্রমাণ করে | কেন জরুরি |
+|---|---|
+| ডিফল্ট `native` | switch বন্ধ থাকলে যেন আগের (মাপা) কোডই চলে |
+| Switch কল-এর সময় পড়া হয় | কনফিগ বদলালে সাথে সাথে কাজ করে |
+| `num_gpu=0`, `reasoning=False` সত্যিই **HTTP কলে** পৌঁছায় | অবজেক্টে আছে ≠ Ollama পেয়েছে |
+| অচেনা option **ছুঁড়ে ফেলা হয়, চুপচাপ বাদ যায় না** | ভুল বানান নীরবে উপেক্ষা হলে বিপদ |
+| `{ }` আর `<document>` template-এ ঢুকে বদলায় না | ৬.৫-এর ফাঁদ |
+| library-র error → প্রজেক্টের নিজের error | `engine.py` না বদলে চলে |
+| `done` ছাড়া stream শেষ → `done` পাঠানো হয় না | অর্ধেক উত্তরকে পূর্ণ বলে চালানো যাবে না |
+| stream বন্ধ করলে ওপরের HTTP-ও বন্ধ | ছেড়ে-যাওয়া উত্তর মডেল আটকে রাখবে না |
+| shell-এ `true` থাকলেও LangSmith বন্ধ | ডেটা বাইরে যাওয়া ঠেকানো |
+| `requirements.txt`-এ ভার্সন বাঁধা | ৬.২ |
+
+**একটা পদ্ধতি শিখুন: "নকল দিয়ে গঠন, আসল দিয়ে সত্য।"** নকল মডেলে চেইনের **গঠন** (জোড়া ঠিক আছে কিনা) টেস্ট করুন — তাৎক্ষণিক, প্রতিবার একই ফল।
+কিন্তু **উত্তর ভালো কিনা** — সেটা শুধু আসল মডেলে ও আসল প্রশ্নে (আমাদের ৪০-প্রশ্নের পরীক্ষা)। নকল মডেল কখনো বলবে না আপনার prompt ভালো কিনা।
+
+---
+
+## ৬.১৮ ধাপ ১৬ — প্রোডাকশনে দেওয়ার আগে (প্রো-স্তরের চেকলিস্ট)
+
+| বিষয় | করণীয় | এই প্রজেক্টে |
+|---|---|---|
+| **ভার্সন** | সঠিক ভার্সন বাঁধুন; `-W always` দিয়ে deprecation-সতর্কতা দেখুন (আমি `RunnableWithMessageHistory` এভাবেই ধরেছি) | ✅ `requirements.txt`-এ বাঁধা |
+| **Async** | ওয়েব সার্ভারে `ainvoke`/`astream` (অপেক্ষার সময় সার্ভার আটকে থাকে না) | এই প্রজেক্ট sync generator ব্যবহার করে, FastAPI থ্রেডপুলে চালায় |
+| **Concurrency** | মডেলের সমান্তরাল ক্ষমতার চেয়ে বেশি কল ছুড়বেন না (`max_concurrency`) | `NUM_PARALLEL=1`, একটা slot |
+| **Timeout** | সবসময় বাঁধুন | ✅ |
+| **Retry** | শুধু যে ব্যর্থতা আবার চেষ্টায় সারে (সংযোগ), timeout-এ নয় | ✅ |
+| **Error** | library-র error নিজের ধরনে অনুবাদ করুন, যাতে বাকি কোড না বদলায় | ✅ `_translate()` |
+| **Cancel** | ব্যবহারকারী চলে গেলে ওপরের কাজ বন্ধ করুন | ✅ পরীক্ষিত (০.৪ সেকেন্ড) |
+| **নিরাপত্তা** | অবিশ্বস্ত লেখা = ডেটা, নির্দেশ নয়; tool-এ ন্যূনতম ক্ষমতা | ✅ ৩.১২; tool নেই |
+| **গোপনীয়তা** | ক্লাউড ট্রেসিং বন্ধ রাখুন যদি ডেটা বাইরে যাওয়া নিষেধ | ✅ জোর করে বন্ধ |
+| **টেস্ট** | নকল মডেলে গঠন, আসল মডেলে মান | ✅ |
+| **মাপা** | যেকোনো বদল (মডেল, prompt, backend) এর পর পূর্ণ পরীক্ষা চালান | ✅ ৪০-প্রশ্ন |
+
+**⚠️ যাচাই করা হয়নি:** ডিপ্লয় করার LangChain-এর নিজস্ব পথ (যেমন LangGraph Platform, LangServe) — আমি চালাইনি। নামগুলো বদলাতে/বন্ধ হতে পারে; অফিশিয়াল ডক দেখুন।
+
+---
+
+## ৬.১৯ এই প্রজেক্টে LangChain ঠিক কীভাবে বসানো (A থেকে Z)
+
+### মূল ধারণা: একটা switch, দুটো পথ
+
+এই প্রজেক্ট আগে **LangChain ছাড়া** চলত এবং ৪০/৪০ পেয়েছিল। সেই মাপা কোড নষ্ট না করে LangChain যোগ করা হয়েছে **একটা switch হিসেবে।**
+মডেল-ডাকার জায়গায় এখন একটা "দরজা" (`backend.py`) — সে `.env`-এর `USE_LANGCHAIN` দেখে ঠিক করে কোন পথে যাবে।
+
+```
+engine.py ──► backend.py ──┬── USE_LANGCHAIN=0 (ডিফল্ট) ──► llm.py   (আগের হাতে-লেখা httpx কোড)
+ (আর rewrite.py)           └── USE_LANGCHAIN=1           ──► lc.py    (LangChain: ChatPromptTemplate | ChatOllama)
+                                                                  └──► দুটোই যায় Ollama-তে
+```
+**ছবিতে দেখতে চাইলে:** সাইডবারে **Architecture** → নিচে **১০ থেকে ১৩ নম্বর** অংশ।
+
+### কোন কোন ফাইল বদলেছে বা নতুন
+
+| ফাইল | কী হয়েছে |
+|---|---|
+| `src/config.py` | নতুন `USE_LANGCHAIN` (ডিফল্ট বন্ধ) |
+| `src/chat/backend.py` ✨ নতুন (৪৭ লাইন) | switch: প্রতিবার কল-এর সময় `USE_LANGCHAIN` পড়ে, তারপর `llm.py` বা `lc.py`-র কাছে পাঠায়। `lc.py` **আলসেভাবে** import হয় — switch বন্ধ থাকলে LangChain লোডই হয় না |
+| `src/chat/lc.py` ✨ নতুন (১৮১ লাইন) | LangChain পথ (নিচে বিস্তারিত) |
+| `src/chat/llm.py` | **একটুও বদলায়নি** |
+| `src/chat/engine.py`, `rewrite.py` | `llm` থেকে নয়, `backend` থেকে import করে; আর trace-এ লিখে রাখে কোন backend চালিয়েছে |
+| `src/api/app.py` | `/health` এখন `"backend": "native"` বা `"langchain"` দেখায় |
+| `src/api/static/pipeline.js` | দুটো মডেল-ধাপে tag ও "Called through" সারি (নিচে) |
+| `src/api/static/architecture.js` + `index.html` | Architecture পেজের ১০-১৩ অংশ ও দুটো ছবি |
+| `requirements.txt` | `langchain-core`, `langchain-ollama`, `ollama` — সঠিক ভার্সন বাঁধা |
+| `tests/test_langchain.py` ✨ | ১৬টা টেস্ট |
+| `tests/test_trace.py`, `test_architecture_page.py` ✨ | আরও টেস্ট |
+| `examples/langchain/` ✨ | এই পর্বের সব চালানো-যায়-এমন উদাহরণ |
+
+### `lc.py` ফাংশন ধরে ধরে
+
+**১. কনফিগের আগে — ক্লাউড ট্রেসিং জোর করে বন্ধ**
+```python
+for _name in ("LANGSMITH_TRACING", "LANGCHAIN_TRACING_V2", "LANGCHAIN_TRACING"):
+    os.environ[_name] = "false"
+```
+ফাইলের একদম শুরুতে, **কোনো langchain import-এর আগে।** (৬.১৫)
+
+**২. `to_messages()`** — আমাদের `{role, content}` ডিকশনারি → LangChain-এর `SystemMessage / HumanMessage / AIMessage`। অচেনা role হলে `LLMBadResponse` — চুপচাপ বাদ দেয় না।
+
+**৩. `_PROMPT = ChatPromptTemplate.from_messages([MessagesPlaceholder("messages")])`** — একটাই placeholder; পুরো বার্তার তালিকা অবিকৃত পার হয়ে যায়। (৬.৫-এর `{ }` ফাঁদ এড়াতে।)
+
+**৪. `_model()`** — `ChatOllama` বানায় আমাদের সব option দিয়ে (`num_gpu=0`, `num_ctx`, `num_thread`, `temperature`, `num_predict`, `keep_alive`, `reasoning=False`)।
+`@lru_cache` দিয়ে একই (মডেল, timeout, options)-এর জন্য একটাই অবজেক্ট বারবার ব্যবহার হয় — প্রতি প্রশ্নে নতুন connection বানাতে হয় না।
+
+**৫. `_chain()`** — `options` মেলায় (`merged.update(options)`), আর **অচেনা option হলে `ValueError`।** কারণ: ভুল বানানের option চুপচাপ বাদ গেলে আপনি ভাববেন সেটা কাজ করছে, অথচ করছে না।
+
+**৬. `_translate()`** — library-র error আমাদের নিজের error-এ বদলায়:
+
+| LangChain/library-র error | আমাদের error |
+|---|---|
+| `httpx.TimeoutException` | `LLMTimeout` |
+| `ollama.ResponseError` | `LLMBadResponse` |
+| `ConnectionError`, `httpx.RequestError` | `LLMUnavailable` |
+| অন্য কিছু (সত্যিকারের bug) | **যেমন আছে তেমনই** — ছদ্মবেশ নেই |
+
+এজন্য `engine.py`-কে একটুও বদলাতে হয়নি — সে আগের মতোই `except LLMError` ধরে।
+
+**৭. `chat()`** — একটা পূর্ণ উত্তর (rewriter ও token গোনার জন্য)। সংযোগ প্রত্যাখ্যাত হলে **একবার** আবার চেষ্টা; timeout-এ **কখনো নয়** (আগের `llm.py`-র নিয়মই)।
+
+**৮. `chat_stream()`** — টুকরো টুকরো উত্তর। দুটো গুরুত্বপূর্ণ নিয়ম:
+- শেষ টুকরোটায় Ollama-র `done=true` থাকলে তবেই `("done", metrics)` পাঠায়। **`done` ছাড়া stream শেষ হলে `done` পাঠায় না** — আর `engine.py` সেটাকে **ব্যর্থতা** ধরে, শেষ উত্তর নয়। (CLAUDE.md §৭-এর শিক্ষা: অর্ধেক উত্তরকে সম্পূর্ণ বলে চালানো যাবে না।)
+- `GeneratorExit` (ব্যবহারকারী চলে গেলে) আটকায় না, বরং ছেড়ে দেয় — যাতে ওপরের HTTP অনুরোধও বন্ধ হয়।
+
+### চালু করা ও যাচাই করা
+
+1. `.env` ফাইলে লিখুন: `USE_LANGCHAIN=1`
+2. সার্ভার **restart** করুন (`start-lan.bat`)
+3. `http://127.0.0.1:8000/health` খুলুন → `"backend": "langchain"` দেখাবে
+4. একটা প্রশ্ন করুন → Pipeline পেজে **Rewrite** ও **Write the answer** ধাপে `LangChain · ChatOllama` tag দেখবেন
+
+বন্ধ করতে: `USE_LANGCHAIN=0` (বা লাইনটা মুছুন) আর restart।
+
+### Pipeline পেজে প্রতি মেসেজের পর কী দেখা যায়
+
+| কোথায় | কী | কখন |
+|---|---|---|
+| **Rewrite the follow-up** ও **Write the answer** ধাপের tag | `LangChain · ChatOllama` অথবা শুধু `Ollama` | যে মেসেজে মডেল চলেছে |
+| একই দুই ধাপ খুললে একটা সারি | **Called through**: `LangChain (ChatPromptTemplate \| ChatOllama)` অথবা `Native client (httpx)` | প্রতিটা নতুন মেসেজে |
+| প্রথম প্রশ্নে Rewrite ধাপ | **কোনো backend দাবি করে না** | মডেল চলেনি, তাই কিছু দাবিও নেই |
+| পুরোনো সংরক্ষিত মেসেজ | কোনো সারি নেই, "null" শব্দও নেই | এই ফিচারের আগের মেসেজ |
+
+তিনটা অবস্থাই (LangChain / native / পুরোনো সার্ভার) আমি আসল `pipeline.js` একটা সিমুলেটেড ব্রাউজারে চালিয়ে পরীক্ষা করেছি।
+
+### যা মাপা হয়েছে (আর কীভাবে)
+
+| প্রমাণ | ফল |
+|---|---|
+| **একই অনুরোধ** — একই বার্তা দুই পথে পাঠিয়ে মডেলের "পড়া টোকেন" গোনা | দুই পথেই **৩১৩** ও **৩৪** — মানে মডেল হুবহু একই prompt পেয়েছে। উত্তরের লেখাও একই |
+| **একই ঘটনা** — প্রথম প্রশ্ন ও ফলো-আপ, দুই পথে | ঘটনার ক্রম একই, **১৭টা ধাপ একই**, উত্তর অক্ষরে অক্ষরে একই |
+| **থামালে সত্যিই থামে** — ৪০০-সংখ্যার লম্বা উত্তর শুরু করে ৩ টুকরো পরে ছেড়ে দিয়ে সাথে সাথে ছোট অনুরোধ | ০.৪ সেকেন্ডে উত্তর। (ওপরে উত্তরটা চলতে থাকলে ছোট অনুরোধটা তার পেছনে লাইনে দাঁড়াত — কতক্ষণ, সেটা আমি মাপিনি; শুধু এটুকু জানি যে লাইনে দাঁড়ায়নি) |
+| **টেস্ট** | ২৮৯টা পাস, ০ ব্যর্থ (`test_retrieve.py` বাদে — ওটার জন্য index-এর lock লাগে, যেটা আপনার সার্ভারের হাতে) |
+| **পূর্ণ ৪০-প্রশ্নের পরীক্ষা, LangChain চালু অবস্থায়** | **৪০/৪০ সঠিক, ০ error।** Q33 (যেটা grader আগে ভুল করে পাস করিয়েছিল) আমি নিজে হাতে মিলিয়েছি: উত্তরে ৮০ ও ২০০ দুটোই আছে |
+| Accuracy পেজ | নতুন ফলাফলে বানানো; পেজ নিজেই দেখায় কোন উত্তর-প্রভাবী ফাইল এখনো commit হয়নি |
+
+### যা মাপা হয়নি (এটাও সমান জরুরি)
+
+- **গতি।** দুই পথ একটার পর একটা চলেছে; দ্বিতীয়টা সবসময় মডেলের **গরম cache** পেয়েছে। তাই "LangChain দ্রুত" বা "ধীর" — কোনোটাই বলা যায় না। (একটা তুলনায় ১৮ সেকেন্ড বনাম ৪১ সেকেন্ড দেখা গিয়েছিল — সেটা শুধু cache-এর প্রভাব।)
+- **একই মেশিন, একই OS।** অন্য মেশিনে (যেমন CLAUDE.md-র "মেশিন B") চালিয়ে দেখা হয়নি।
+- **দীর্ঘ সময় চালানো।** অনেক ঘণ্টা/দিন চালিয়ে memory leak আছে কিনা — দেখা হয়নি।
+
+### সৎ উপসংহার: এতে কী লাভ হলো?
+
+**উত্তরের মানে কোনো লাভ হয়নি, ক্ষতিও হয়নি** — ৪০/৪০ আগেও ছিল, এখনো আছে (LangChain চালু অবস্থায়)।
+লাভ অন্য জায়গায়: (ক) আপনি **শিখলেন**, (খ) ভবিষ্যতে অন্য মডেল-প্রোভাইডার চেষ্টা করা এক লাইনের ব্যাপার হতে পারে (এই প্রজেক্ট অবশ্য লোকালই থাকবে), (গ) একটা মানসম্মত কাঠামো যা অন্য LangChain-জানা মানুষ চেনেন।
+**দাম:** তিনটা বাড়তি প্যাকেজ, ১৮১ লাইনের বাড়তি কোড, আর "দুটো পথ রক্ষণাবেক্ষণ" — প্রতিবার মডেল-ডাকার কিছু বদলালে দুটোই বদলাতে হবে।
+এই দামটা CTO-কে সৎভাবে বলুন।
+
+---
+
+## ৬.২০ আসল মডেলে চালিয়ে দেখা (`c06` ও `c07`)
+
+এতক্ষণ বেশিরভাগ উদাহরণে নকল মডেল ছিল। এবার আসল Ollama মডেলে (`qwen3:1.7b`, `qwen3:4b`, `bge-m3`)।
+**সময় লাগে:** `c06` প্রায় ৫ মিনিট (CPU)। নিচের সব আউটপুট আসল।
+
+### ১. `ChatOllama`: কী কী ফেরত আসে
+
+```
+text            : 'ok' (0.2s)
+type            : AIMessage
+usage_metadata  : {'input_tokens': 21, 'output_tokens': 2, 'total_tokens': 23}
+metadata keys   : ['done', 'done_reason', 'eval_count', 'load_duration', 'model', 'prompt_eval_count', 'total_duration']
+```
+শুধু লেখাই নয় — `usage_metadata`-তে **টোকেন গোনা** আছে (পড়া ২১, লেখা ২)। আর `response_metadata`-তে Ollama-র সময়-তথ্য। আমাদের `lc.py` ঠিক এই `response_metadata` থেকেই
+`done` ফ্রেমের prefill/generation সময় বানায়।
+
+### ২. `.stream()` আর ৩. `init_chat_model`
+
+```
+3 pieces: ['Red', ',', ' Blue'] ...
+ChatOllama -> 'Hi.'
+```
+`init_chat_model(নাম, model_provider="ollama", ...)` একটা লাইনে মডেল বানায়, আর প্রোভাইডার বদলে (`"openai"`, `"anthropic"`...) একই কোড চালানো যায়।
+(আমি শুধু `ollama` চালিয়েছি — ⚠️ অন্য প্রোভাইডার যাচাই করা হয়নি।)
+
+### ৪. Structured output: ছোট মডেলে কতটা ভরসাযোগ্য? (সবচেয়ে শিক্ষণীয় অংশ)
+
+`with_structured_output(Plan)` মডেলকে বলে: "আমার ছকে মিলিয়ে উত্তর দাও।" ছকটা:
+
+```python
+class Plan(BaseModel):
+    name: str = Field(description="plan name")
+    price_bdt: int = Field(description="monthly price in BDT")
+```
+লেখা: *"The Growth plan costs BDT 2,500 per agent per month."* — সঠিক উত্তর `price_bdt = 2500`।
+
+**একই কোড, বিভিন্ন দিনে/রানে, ফল এল ভিন্ন:**
+
+| রান | মডেল ও পদ্ধতি | ফল |
+|---|---|---|
+| `c06`, প্রথম রান | `qwen3:1.7b` | ৩/৩ সঠিক |
+| `c06`, প্রথম রান | `qwen3:4b` | ৩/৩ সঠিক |
+| `c06`, শেষ রান | `qwen3:1.7b` | ৩/৩ সঠিক |
+| `c06`, শেষ রান | `qwen3:4b` | **০/৩** — `price_bdt=2500000000000000` (এক "runaway" সংখ্যা!) |
+| `c07` | `qwen3:4b`, `json_schema` (ডিফল্ট), temperature ০.১ | ৬/৬ সঠিক |
+| `c07` | `qwen3:4b`, `json_schema`, temperature ০ | ৬/৬ সঠিক |
+| `c07` | `qwen3:4b`, `function_calling` (দুই temperature-এ) | **০/৬** — ফলাফল `None` |
+| `c07` | `qwen3:4b`, `json_mode` | **০/৬** — `OutputParserException` |
+
+**এখান থেকে সৎ শিক্ষা:**
+
+1. **একটা রান কিছুই প্রমাণ করে না।** প্রথমে আমি লিখতে যাচ্ছিলাম "৪B-তে structured output ৩/৩ কাজ করে" — পরের রানে ০/৩ এল। তাই `c07` বানিয়ে বারবার মাপলাম।
+2. **ডিফল্ট `json_schema` পদ্ধতি এই মডেলে ভালো চলেছে** (১৫/১৮ চেষ্টা সঠিক — কিন্তু ব্যর্থতাগুলো সব **একই রানে** জমা, তাই এগুলো স্বাধীন নয়)। **কেন একটা রানে হঠাৎ এমন হলো, আমি জানি না।**
+   আমি খুঁজে বের করিনি — অনুমান লিখব না।
+3. **অন্য দুই পদ্ধতি (`function_calling`, `json_mode`) এই মডেলে একবারও কাজ করেনি।** মানে পদ্ধতি বেছে নেওয়া গুরুত্বপূর্ণ, আর ডিফল্ট না মানলে বিপদ।
+4. **সবচেয়ে ভয়ের জিনিস:** `2500000000000000` একটা **বৈধ `int`** — Pydantic কোনো আপত্তি করেনি! **ছকে মিললেই উত্তর সঠিক নয়।** ছকে সীমা বসান:
+   `price_bdt: int = Field(ge=0, le=1_000_000)` — তাহলে ওই runaway সংখ্যা ধরা পড়ত। (⚠️ এই সীমা-সহ সংস্করণ আমি চালিয়ে দেখিনি; ধারণাটা Pydantic-এর সাধারণ ফিচার।)
+5. **নিয়ম:** ছোট মডেলে structured output ব্যবহার করলে সবসময় **যাচাই (validation) + আবার চেষ্টা (retry) + শেষে মানুষের নজর।**
+
+### ৫. Tool calling `qwen3:4b`-তে
+
+```
+model asked for tools: [('add', {'a': 17, 'b': 25})]
+we run it            : 42
+```
+মডেল ঠিকঠাক `add(17, 25)` চালানোর **অনুরোধ** করল (৬.১২-এর ধাপ ১)। আমরা চালালাম, ফল ৪২। **কিন্তু এটা একটাই চেষ্টা** — নির্ভরযোগ্যতার প্রমাণ নয়। (৩.২-তে যা লিখেছি,
+"৪B tool calling-এ দুর্বল" — সেটা এই এক চেষ্টা দিয়ে বাতিল হয় না, সমর্থনও হয় না; আমি এটা বারবার মাপিনি।)
+
+### ৬. আসল embedding — মানে বোঝে, বানান নয়
+
+```
+vector length                          : 1024
+leave vs vacation (same meaning)       : 0.766
+leave vs error code (different meaning): 0.36
+```
+"annual leave" আর "yearly vacation" — একটা শব্দও মেলে না, তবু সাদৃশ্য **০.৭৬৬।** "leave"-এর সাথে "error code" — **০.৩৬।** এটাই embedding-এর জাদু (৩.৬)।
+(`OllamaEmbeddings`-এ `keep_alive` লাগে **সেকেন্ডে, পূর্ণসংখ্যা** — `ChatOllama`-তে যেখানে `"30m"` চলে। আমি প্রথমবার `"30m"` দিয়ে `ValidationError` পেয়েছি।
+আর `num_gpu=0` এখানেও **অবশ্যই** — না দিলে `bge-m3` এই মেশিনে crash করে (CLAUDE.md §২)।)
+
+### ৭. এই প্রজেক্টের আসল ৫০টা টুকরোর ওপর ~২০ লাইনের RAG
+
+```
+embedded 50 passages in 46s
+
+Q: How many days of annual leave do I get?
+   retrieved: ['leave_policy_v2.1_2024_SUPERSEDED.md', 'employee_handbook_v3.md', 'leave_policy_v2.1_2024_SUPERSEDED.md', 'employee_handbook_v3.md', 'employee_handbook_v3.md']
+A: You get 18 days of annual leave per year.   [employee_handbook_v3.md]   (25s)
+
+Q: Is the old policy of 15 annual leave days still valid?
+   retrieved: ['leave_policy_v2.1_2024_SUPERSEDED.md', 'employee_handbook_v3.md', 'employee_handbook_v3.md', 'leave_policy_v2.1_2024_SUPERSEDED.md', 'leave_policy_v2.1_2024_SUPERSEDED.md']
+A: No, the old policy of 15 annual leave days is not valid. It has been superseded by the Employee Handbook v3.0 ...   [leave_policy_v2.1_2024_SUPERSEDED.md]   (25s)
+```
+**দেখুন কী হলো:**
+- দুটো উত্তরই **সঠিক** — সরল LangChain RAG এই দুই প্রশ্নে ভালো করেছে।
+- **কিন্তু** প্রথম প্রশ্নে খোঁজা **সবার আগে পুরোনো (SUPERSEDED) নীতি** এনেছে। এই প্রজেক্টের "পুরোনো পলিসি নামানো" ধাপ (ধাপ ১০) থাকলে ওটা নিচে যেত।
+- আর দ্বিতীয় উত্তরের **citation শুধু পুরোনো ফাইল** (`leave_policy_v2.1_2024_SUPERSEDED.md`) — উত্তরের লেখা ঠিক, কিন্তু উৎস হিসেবে "বাতিল" ডকুমেন্টকে দেখানো ঠিক নয়।
+- **সীমা:** মাত্র দুটো প্রশ্ন। এটা প্রমাণ করে না যে সরল RAG ব্যর্থ। শুধু দেখায় ফাঁদটা কোথায় ছিল, আর কেন আমাদের নিজের ধাপ আছে।
+
+---
+
+## ৬.২১ সাধারণ ভুল ও ফাঁদ (আমি নিজে যেগুলোতে পড়েছি, সেগুলো আগে)
+
+| # | ফাঁদ | কীভাবে ধরলাম | সমাধান |
+|---|---|---|---|
+| ১ | Template-এর লেখায় `{ }` → `KeyError` | এই প্রজেক্টের নকশার সময় | `{{ }}`, বা মান `MessagesPlaceholder`/ভ্যারিয়েবলে পাঠান |
+| ২ | **পুরোনো টিউটোরিয়ালের** `RunnableWithMessageHistory` — এখন deprecated | `-W always` দিয়ে চালিয়ে | LangGraph checkpointer (৬.১১) |
+| ৩ | সময় মেপে "সমান্তরাল প্রমাণ" — ফল কখনো ০.৩১, কখনো ১.০৪ সেকেন্ড | নিজেই দুটো রান করে | `Barrier` বা গণনার মতো **অ-সময়-নির্ভর** প্রমাণ |
+| ৪ | `OllamaEmbeddings(keep_alive="30m")` → `ValidationError` | `c06` চালিয়ে | সেকেন্ডে পূর্ণসংখ্যা (`1800`) |
+| ৫ | embedding-এ `num_gpu=0` ভুলে যাওয়া → `bge-m3` crash | CLAUDE.md §২ | সবসময় দিন |
+| ৬ | **ছকে মিললেই সঠিক ভাবা** (`2500000000000000` ছিল বৈধ `int`) | `c06`-র শেষ রান | `Field(ge=, le=)` সীমা + যাচাই |
+| ৭ | **একটা রান দেখে সিদ্ধান্ত** (structured output ৩/৩ বনাম ০/৩) | দুই রানে ভিন্ন ফল | বারবার মাপুন (`c07`) |
+| ৮ | `print_ascii()` → `ImportError: Install grandalf` | `c02` চালিয়ে | `pip install grandalf` |
+| ৯ | নকল embedding দিয়ে "মানে" খোঁজার আশা | ৬.৮ | নকল শুধু **হুবহু একই লেখা** মেলায়; আসল মানের জন্য `bge-m3` |
+| ১০ | `langchain-core` ইনস্টল করলে `langsmith`-ও আসে | `pip` আউটপুটে | ক্লাউড ট্রেসিং জোর করে বন্ধ (৬.১৫) |
+| ১১ | `batch` সবগুলো একসাথে ছোড়ে → একটা slot-এর সার্ভারে "busy" | `requests.log`-এর ৮৮টা busy | `max_concurrency=1` |
+| ১২ | role-এর নাম: LangChain `human`/`ai`, প্রচলিত `user`/`assistant` | ৬.৩ | দুটোই বোঝে, কিন্তু একটা বেছে নিয়ে একই রাখুন |
+| ১৩ | অনন্ত লুপ (LangGraph-এ নিজের দিকে ফেরা) | ৬.১৪ | সবসময় থামার শর্ত |
+| ১৪ | সময়ের **ওপরের সীমা** মাপা (ব্যস্ত মেশিনে বদলায়) | ৬.১৬ | শুধু **নিচের সীমা** মাপুন, বা সময় না মেপে ঘটনা গুনুন |
+| ১৫ | ভার্সন না বেঁধে ইনস্টল | সাধারণ নিয়ম | `requirements.txt`-এ `==` |
+
+---
+
+## ৬.২২ অনুশীলন (নিজে করুন — এভাবেই শেখা পাকা হয়)
+
+প্রতিটা `examples/langchain/`-র কোনো একটা ফাইল বদলিয়ে করা যায়। (এগুলো আমি চালাইনি — এগুলো আপনার কাজ; উত্তরের **ইঙ্গিত** দেওয়া আছে।)
+
+1. **(সহজ)** `c01`-এর `ChatPromptTemplate`-এ একটা নতুন ভ্যারিয়েবল `{language}` যোগ করুন। *ইঙ্গিত:* `input_variables` দেখে নিশ্চিত হন।
+2. **(সহজ)** একটা চেইন বানান: `অনুবাদ করো | সংক্ষেপ করো` — দুটো `FakeListChatModel` দিয়ে। *ইঙ্গিত:* প্রথম মডেলের আউটপুট `StrOutputParser` হয়ে দ্বিতীয় prompt-এ যাবে; মাঝে `{"text": ...}` বানাতে `RunnableLambda`।
+3. **(মধ্যম)** `RunnableBranch` বানান: প্রশ্নে `ND-` কোড থাকলে "error-support" রাস্তা, নইলে "general"। *ইঙ্গিত:* `re.search(r"ND-\d+", q)`।
+4. **(মধ্যম)** `c03`-র `KeywordRetriever` বদলে প্রতিটা ফলে `matched_terms` (প্রশ্নের কোন শব্দ মিলল) metadata-তে দিন।
+5. **(মধ্যম)** `c05`-র loop-গ্রাফে সর্বোচ্চ ৫ চেষ্টা আর তারপর `END` — আর ৩ নম্বর চেষ্টায় সফল হলে আগে থামুন।
+6. **(মধ্যম)** `USE_LANGCHAIN=1` দিয়ে সার্ভার চালিয়ে একটা প্রশ্ন করুন; Pipeline-এ tag আর "Called through" সারি খুঁজে বের করুন। তারপর `0` করে আবার।
+7. **(কঠিন)** `c04`-র `Timeline` callback-এ প্রতিটা ধাপের **সময়** (`time.perf_counter()`) রেকর্ড করুন, আর শেষে ধাপ-ধরে সময়ের তালিকা ছাপুন।
+8. **(কঠিন)** `c07`-র `Plan`-এ `Field(ge=0, le=1_000_000)` বসিয়ে `qwen3:4b`-তে বারবার চালান; ভুল সংখ্যা এলে retry করুন (`with_retry`)। ফল মাপুন।
+9. **(প্রো)** `rewrite.py`-র কাজটা LangChain-এ আসল মডেলে করুন (`c03`-র ৮ নম্বর অংশ আসল `ChatOllama` দিয়ে), আর এই প্রজেক্টের `rewrite.py`-র সাথে ৫টা ফলো-আপ প্রশ্নে তুলনা করুন।
+10. **(প্রো)** LangGraph-এ "মানুষের অনুমতি" দিয়ে একটা খরচ-অনুমোদন গ্রাফ বানান: ৩০,০০০ টাকার ওপরে হলে `interrupt`, নিচে হলে সরাসরি পাশ।
+
+---
+
+## ৬.২৩ এক পাতার চিটশিট
+
+| আমি চাই… | লিখুন |
+|---|---|
+| মডেল ডাকতে | `ChatOllama(model=..., num_gpu=0, ...)` বা `init_chat_model(...)` |
+| একটা উত্তর | `model.invoke(x)` |
+| টুকরো টুকরো উত্তর | `model.stream(x)` |
+| অনেকগুলো একসাথে | `model.batch([...], config={"max_concurrency": 1})` |
+| prompt ছাঁচ | `ChatPromptTemplate.from_messages([("system", "..."), MessagesPlaceholder("history"), ("human", "{q}")])` |
+| আসল `{ }` লিখতে | `{{ }}` |
+| উত্তরকে লেখা বানাতে | `\| StrOutputParser()` |
+| উত্তরকে অবজেক্ট বানাতে | `model.with_structured_output(MyModel)` + **সীমা ও যাচাই** |
+| ধাপ জোড়া | `a \| b \| c` |
+| একসাথে চালাতে | `RunnableParallel(x=..., y=...)` বা `{"x": ..., "y": ...}` |
+| তথ্য বয়ে নিতে | `RunnablePassthrough.assign(new=...)` |
+| রাস্তা বেছে নিতে | `RunnableBranch((cond, runnable), ..., default)` |
+| আবার চেষ্টা | `.with_retry(stop_after_attempt=3)` |
+| বিকল্প | `.with_fallbacks([backup])` |
+| ফাংশনকে যন্ত্র বানাতে | `@tool` + **ভালো docstring** |
+| agent | `create_agent(model=..., tools=[...])` |
+| বিন্দু-রেখার গ্রাফ | `StateGraph` → `add_node`, `add_edge`, `add_conditional_edges`, `compile()` |
+| স্মৃতি (আধুনিক) | `compile(checkpointer=InMemorySaver())` + `config={"configurable": {"thread_id": ...}}` |
+| মানুষের অনুমতি | `interrupt(...)` + `Command(resume=...)` |
+| ভেতরে কী ঘটছে | `BaseCallbackHandler` বা `astream_events(version="v2")` |
+| পুরনো কথা কাটতে | `trim_messages(..., strategy="last", start_on="human")` |
+| ক্যাশ | `set_llm_cache(InMemoryCache())` |
+| ক্লাউড ট্রেসিং বন্ধ | `LANGSMITH_TRACING=false` (এই প্রজেক্টে `lc.py` জোর করে বসায়) |
+| চেইনের ছবি | `chain.get_graph().print_ascii()` (+ `grandalf`) |
+
+---
+
+## ৬.২৪ শব্দকোষ (English ↔ বাংলা)
+
+| English | সহজ বাংলা অর্থ |
+|---|---|
+| Chain | ধাপ জুড়ে বানানো কাজের সারি |
+| Runnable | `invoke/stream/batch` জানে এমন যেকোনো অংশ |
+| LCEL | `\|` চিহ্ন দিয়ে ধাপ জোড়ার ভাষা |
+| Message | মডেলের সাথে এক টুকরো কথা (ভূমিকাসহ) |
+| Prompt template | মডেলকে যা বলা হবে তার ছাঁচ |
+| Output parser | মডেলের উত্তরকে কাজের আকারে আনে |
+| Retriever | প্রশ্ন নিয়ে ডকুমেন্টের টুকরো খুঁজে আনে |
+| Vector store | অর্থ-সংখ্যা দিয়ে টুকরো রাখার ভাণ্ডার |
+| Embedding | লেখার অর্থকে সংখ্যার তালিকায় বদলানো |
+| Splitter | লম্বা লেখা টুকরো করার যন্ত্র |
+| Tool | মডেল যেটা চালানোর **অনুরোধ** করতে পারে এমন ফাংশন |
+| Agent | মডেল → যন্ত্র → মডেল লুপ, নিজে নিজে |
+| State | গ্রাফের সবার হাতে-হাতে ঘোরা শেয়ার-করা খাতা |
+| Node / Edge | গ্রাফের ধাপ / ধাপের মধ্যে রেখা |
+| Reducer | দুটো ভ্যালু এলে কীভাবে মিলবে তার নিয়ম |
+| Checkpointer | গ্রাফের অবস্থা সংরক্ষণকারী (স্মৃতির জন্য) |
+| `thread_id` | একটা কথোপকথনের পরিচয়-নম্বর |
+| Interrupt | গ্রাফ থামিয়ে মানুষকে জিজ্ঞেস করা |
+| Callback | প্রতিটা ঘটনায় ডাকা আপনার নিজের ফাংশন |
+| Streaming | উত্তর একটু একটু করে পাওয়া |
+| Structured output | মডেলকে ছক মানতে বাধ্য করা উত্তর |
+| Deprecated | "আজই চলে, কিন্তু ভবিষ্যতে মুছে যাবে" |
+| Pin (ভার্সন বাঁধা) | সঠিক ভার্সন লিখে রাখা (`==`) |
+| LangSmith | LangChain-এর **ক্লাউড** ট্রেসিং সার্ভিস |
+| Fake model | টেস্টের জন্য আগে-থেকে-লেখা উত্তর দেওয়া নকল মডেল |
+| Backend (এই প্রজেক্টে) | কোন কোড Ollama-কে ডাকছে: `native` নাকি `langchain` |
+
+---
+
+## ৬.২৫ প্রো হওয়ার পথ — আর এই গাইডে যা নেই
+
+### পরামর্শ: ৬ ধাপে শেখা
+
+| সপ্তাহ | কাজ |
+|---|---|
+| ১ | ৬.১–৬.৭ পড়ুন, `c01` `c02` চালান, অনুশীলন ১-৩ |
+| ২ | ৬.৮–৬.১০, `c03`; অনুশীলন ৪ ও ৯ |
+| ৩ | ৬.১১–৬.১৩, `c04`; অনুশীলন ৫ |
+| ৪ | ৬.১৪, `c05` (LangGraph); অনুশীলন ৫, ১০ |
+| ৫ | ৬.১৫–৬.১৮, `c06` `c07`; অনুশীলন ৭, ৮ |
+| ৬ | ৬.১৯ — `lc.py` লাইন ধরে পড়ুন; অনুশীলন ৬; নিজে একটা ছোট প্রজেক্ট |
+
+### ❌ এই গাইডে যা নেই (সৎ তালিকা)
+
+"কিছুই বাদ নেই" দাবি করব না। যা এখানে **নেই** বা শুধু নাম-উল্লেখ আছে:
+
+- **`langchain-community`-র শত শত integration** (বিভিন্ন vector DB, document loader — PDF, ওয়েব, ডেটাবেস)। ⚠️ আমি ইনস্টলই করিনি।
+- **Multimodal** (ছবি/অডিও সহ বার্তা)
+- **`create_agent`-এর middleware** ও `response_format`
+- **LangGraph-এর** subgraph, multi-agent (supervisor), সব `stream_mode`, স্থায়ী (ডেটাবেস) checkpointer, LangGraph Platform/Studio
+- **LangSmith-এর** ওয়েব ইন্টারফেস, মূল্যায়ন (evals), ডেটাসেট; এবং বিকল্প (Langfuse, OpenTelemetry)
+- **Qdrant** বা অন্য বাহ্যিক vector store-এর LangChain integration
+- **MCP** এর সাথে LangChain-এর সংযোগ
+- **ডিপ্লয়মেন্ট** (LangServe, LangGraph Platform)
+- **অন্য প্রোভাইডার** (OpenAI, Anthropic ইত্যাদি) — শুধু `ollama` চালিয়েছি
+- **Contextual compression, MultiQuery retriever, reranker integration**
+- **সারাংশ-স্মৃতি**
+
+এগুলোর প্রতিটার জন্য: **অফিশিয়াল ডক** (`docs.langchain.com`) পড়ুন, আর আগে ছোট করে নিজে চালিয়ে নিন — ঠিক এই গাইডের নিয়মে: *যা চালাননি, তা বিশ্বাস করবেন না।*
+
+### প্রো-র তিনটা অভ্যাস (এই পর্ব থেকে যা শিখলাম)
+
+1. **প্রতিটা দাবি চালিয়ে দেখুন।** আমি নিজেই ভুল করেছিলাম (retriever-এ স্কোর বহনের দাবি) — চালিয়ে দেখে ধরেছি।
+2. **একটা রান যথেষ্ট নয়।** ফল ভিন্ন আসতে পারে (৪B structured output)।
+3. **`-W always` দিয়ে চালান।** deprecation-সতর্কতা ভবিষ্যতের ভাঙনের আগাম খবর।
+
+---
+
+## ৬.২৬ CTO LangChain নিয়ে যা জিজ্ঞেস করতে পারেন
+
+### প্র: আপনি কি LangChain ব্যবহার করেছেন?
+**উ:** ঐচ্ছিকভাবে, **শুধু দুটো মডেল-কলে** (প্রশ্ন সোজা করা ও উত্তর লেখা)। একটা switch দিয়ে চালু/বন্ধ করা যায়, ডিফল্ট **বন্ধ।** খোঁজা, rerank, guardrail, pipeline — সব আমাদের নিজের কোড।
+
+### প্র: পুরোটা LangChain-এ করলেন না কেন?
+**উ:** প্রথমত, আমাদের Pipeline পেজ প্রতিটা ধাপের কাঁচা তথ্য ও সময় দেখায় — যার কিছু (প্রশ্নের token, shortlist-এর নিয়ম, floor-এর রায়, ধাপের সময়) **কোনো একটা টুকরোর তথ্য নয়**, তাই LangChain retriever-এর রিটার্ন-ভ্যালুতে রাখার জায়গা নেই।
+দ্বিতীয়ত, ডকুমেন্টের ফাঁদগুলো (টেবিল, পুরোনো পলিসি, injection, কোড) সামলানোর নিয়ম আমাদের নিজের, মাপা ও টেস্ট-করা। এগুলো বদলে ঝুঁকি নেওয়ার কারণ ছিল না।
+
+### প্র: LangChain কি উত্তরের মান বাড়িয়েছে?
+**উ:** **না, বাড়ায়নি; কমায়ওনি।** ৪০/৪০ আগেও (১২ নভেম্বর) ছিল, LangChain চালু অবস্থায় এখনো (১৯ নভেম্বর) — Q33 হাতে মিলিয়ে। এটা মডেল *কীভাবে ডাকা হয়* সেটা বদলায়, মডেল *কী বলে* সেটা নয়।
+
+### প্র: LangSmith কি চালু? ডেটা কি বাইরে যায়?
+**উ:** **বন্ধ, আর জোর করে বন্ধ** — `lc.py` সবার আগে এটা `false` বসায়, আর একটা টেস্ট প্রমাণ করে যে shell-এ `true` থাকলেও বন্ধ থাকে। **তবে সৎভাবে:** `langsmith` প্যাকেজটা `langchain-core`-এর সাথে আপনা-আপনি ইনস্টল হয়। প্যাকেজ আছে, ব্যবহার নেই।
+
+### প্র: LangChain-এর ভার্সন বদলালে ভাঙবে না?
+**উ:** ভার্সন সঠিকভাবে বাঁধা (`requirements.txt`), আর একটা টেস্ট সেটা পাহারা দেয়। ভাঙার ঝুঁকি বাস্তব — আমি নিজেই লেখার সময় একটা deprecated জিনিস ধরেছি (`RunnableWithMessageHistory`)। তাই আপগ্রেডের আগে `-W always` দিয়ে চালিয়ে আর ৪০-প্রশ্নের পরীক্ষা আবার চালিয়ে তারপর।
+
+### প্র: একই কাজ দুই কোডে — রক্ষণাবেক্ষণ কঠিন না?
+**উ:** হ্যাঁ, এটা বাস্তব দাম। প্রতিবার মডেল-ডাকার কিছু বদলালে `llm.py` ও `lc.py` দুটোই বদলাতে হবে। তাই contract (`chat`, `chat_stream`) এক রাখা হয়েছে, আর টেস্ট দুই পথকেই একই নিয়মে মাপে। চাইলে ভবিষ্যতে একটা বাদ দেওয়া যায়।
+
+### প্র: LangChain কি দ্রুত?
+**উ:** **মাপা হয়নি,** আর তাই কিছু বলব না। দুই পথ একটা-একটা করে চালানোয় দ্বিতীয়টা সবসময় গরম cache পেয়েছে — তুলনাটা অন্যায্য হতো।
+
+### প্র: Agent বা tool ব্যবহার করেছেন?
+**উ:** **না** (৩.২, ৬.১৩)। দেখিয়েছি ধারণাটা কীভাবে কাজ করে (নকল মডেলে), আর আসল ৪B মডেলে একটা tool-call একবার সফল হয়েছে — কিন্তু বারবার মাপিনি, তাই নির্ভরযোগ্যতা নিয়ে দাবি করছি না। এই প্রজেক্টের কাজে tool-এর দরকারও ছিল না।
+
+### প্র: কতটা পরীক্ষা করেছেন?
+**উ:** ২৮৯টা স্বয়ংক্রিয় টেস্ট পাস (`test_retrieve.py` বাদে, যেটার index-lock আপনার সার্ভারের হাতে); দুই backend-এ একই ঘটনা-ক্রম ও একই উত্তর; থামালে মডেল ০.৪ সেকেন্ডে মুক্ত; আর পূর্ণ ৪০-প্রশ্নের পরীক্ষা ৪০/৪০।
+
+
+---
+
 ## শেষ কথা — এক লাইনে মনে রাখার জিনিস
 
 1. **চারটা মডেল, চারটা কাজ** — একটা নয়
@@ -1875,6 +3497,8 @@ python -m src.index
 13. **Training নয়, শুধু inference** — আপনার প্রশ্ন থেকে মডেল শেখে না
 14. **যা মাপেননি, তা স্পষ্ট বলুন** — যেমন "সব ডকুমেন্ট prompt-এ ঢোকালে কী হতো" (পর্ব ৫)
 15. **প্রতিটা সংখ্যা মাপা** — অনুমান নয়, আর অনুমান হলে সেটা অনুমান বলেই লেখা
+16. **LangChain একটা ঐচ্ছিক switch** — শুধু মডেল-ডাকায়, ডিফল্ট বন্ধ; উত্তরের মান বাড়ায়নি, কমায়ওনি (৪০/৪০ দুই অবস্থায়); ক্লাউড ট্রেসিং জোর করে বন্ধ (পর্ব ৬)
+17. **একটা রান যথেষ্ট নয়** — ছোট মডেলের structured output কখনো ৩/৩, কখনো ০/৩ এসেছে; বারবার মেপে তবে বলুন (৬.২০)
 
 ---
 

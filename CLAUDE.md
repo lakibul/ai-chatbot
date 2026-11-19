@@ -285,7 +285,7 @@ floor sits after it** (only the calibrated score is trustworthy).
 | `src/ingest/` | `parse_md`, `parse_pdf`, `normalise`, `chunk`, `sanitise`, `build` |
 | `src/index/` | `embed` (Ollama), `vector` (Qdrant), `lexical` (BM25), `types` |
 | `src/retrieve/` | `rrf`, `code_boost`, `rerank`, `pipeline` |
-| `src/chat/` | `llm`, `prompts`, `rewrite`, `smalltalk`, `memory`, `engine` |
+| `src/chat/` | `llm`, `backend`, `lc`, `prompts`, `rewrite`, `smalltalk`, `memory`, `engine` |
 | `src/api/` | `app` (FastAPI+SSE), `preflight`, `errors`, `static/index.html` |
 | `eval/` | `eval_retrieval` (fast), `eval_answers` (full), `eval_conversations`, `calibrate_floor`, `report` |
 
@@ -455,6 +455,31 @@ wherever they disagree.**
   (U+09A1 U+09BC), not precomposed U+09DC -- see the NFC trap in section 7.
 - Filenames never reach the reader: the model cites `[employee_handbook_v3.md]`,
   the UI strips it and lists clean document titles instead.
+
+---
+
+## 8b. LangChain is an optional backend for the two model calls
+
+`USE_LANGCHAIN=1` in `.env` (restart) sends the rewrite call and the answer call through
+LangChain (`src/chat/lc.py`: `ChatPromptTemplate | ChatOllama`) instead of `llm.py`.
+`engine.py` and `rewrite.py` import from `backend.py`, which reads the flag on every call.
+`GET /health` reports `"backend"`, and the Pipeline page tags the two model steps with it.
+Full explanation: `PROJECT-GUIDE-BN.md` part 6; runnable examples: `examples/langchain/`.
+
+- **Measured:** 40/40 with it on (audited, Q33 checked by hand), identical events, 17 trace
+  steps and answers on both paths. **Not measured:** any speed difference -- the second path
+  always found a warm KV cache.
+- **Retrieval is NOT LangChain.** A retriever returns only Documents. Per-passage scores would fit
+  in `metadata`, but the Pipeline also shows stage-level data (query tokens, shortlist rules,
+  floor verdict, per-step ms). An earlier note here claimed "nowhere to carry scores"; that was wrong.
+- **LangSmith (cloud tracing) is forced OFF in `lc.py`** before any langchain import. The
+  `langsmith` package still installs as a dependency of `langchain-core`. A test pins the override.
+- **Two paths = two things to change.** Keep `llm.py` and `lc.py` honouring the same contract
+  (`chat` -> `ChatResult`; `chat_stream` -> `("token", ...)` then `("done", ...)`, and NO `done`
+  when the stream ends without Ollama's flag).
+- `num_gpu=0` and `reasoning=False` must reach the HTTP request (tested). `OllamaEmbeddings` takes
+  `keep_alive` as an int of SECONDS; `ChatOllama` takes `"30m"`.
+- `RunnableWithMessageHistory` / `InMemoryChatMessageHistory` are deprecated in the pinned version.
 
 ---
 

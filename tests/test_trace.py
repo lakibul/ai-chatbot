@@ -392,3 +392,47 @@ def test_the_merge_step_compares_what_each_search_found_alone():
     assert "filter((x) => x.kept)" in js and "'pl-used', 'used'" in js
     # ...and says plainly what it is NOT, so it cannot be over-read
     assert "keyword-only system would still" in js
+
+
+# ---------------------------------------- which backend made the model call ----
+def _lc_stream(*_a, **_k):
+    yield "token", "18 days. [employee_handbook_v3.md]", {}
+    yield "done", "", ChatResult(text="", model="m", prompt_tokens=100, output_tokens=5,
+                                 prefill_seconds=1.0, generation_seconds=2.0).__dict__
+
+
+def test_the_answer_step_records_which_backend_wrote_it(monkeypatch):
+    """Shown on the Pipeline page after every message, so the reader never has
+    to trust a config file to know which code reached the model."""
+    from src.chat import lc
+    monkeypatch.setattr(llm_module.httpx, "stream", lambda *a, **k: FakeStream(LINES))
+    monkeypatch.setattr(lc, "chat_stream", _lc_stream)
+
+    monkeypatch.setattr(config, "USE_LANGCHAIN", False)
+    by = {t["node"]: t for t in ChatEngine(TracingRetriever()).ask_sync("How many days of annual leave?")["trace"]}
+    assert by["llm"]["data"]["backend"] == "native"
+
+    monkeypatch.setattr(config, "USE_LANGCHAIN", True)
+    by = {t["node"]: t for t in ChatEngine(TracingRetriever()).ask_sync("How many days of annual leave?")["trace"]}
+    assert by["llm"]["data"]["backend"] == "langchain"
+    assert by["llm"]["data"]["answer_raw"].startswith("18 days.")      # same answer either way
+
+
+def test_the_rewrite_step_records_the_backend_only_when_a_model_ran(monkeypatch):
+    monkeypatch.setattr(rewrite_module, "chat", lambda *a, **k: ChatResult(
+        text="How many annual leave days can be carried forward?", model="m"))
+    history = [{"role": "user", "content": "How many leave days?"},
+               {"role": "assistant", "content": "18."}]
+    monkeypatch.setattr(config, "USE_LANGCHAIN", True)
+    _q, _c, ran = rewrite_module.rewrite_with_trace("Can I carry some forward?", history)
+    assert ran["backend"] == "langchain"
+    _q, _c, skipped = rewrite_module.rewrite_with_trace("What are the core hours?", [])
+    assert "backend" not in skipped          # no model ran, so nothing to claim
+
+
+def test_the_pipeline_page_shows_the_backend_tag_and_a_called_through_row():
+    js = (STATIC / "pipeline.js").read_text(encoding="utf-8")
+    assert "function modelTech(f)" in js and "LangChain \u00b7 ChatOllama" in js
+    assert "rewrite: (f) => modelTech(f)" in js and "llm: (f) => modelTech(f)" in js
+    assert js.count("['Called through', through(d.backend)]") == 2     # both model steps
+    assert "LangChain (ChatPromptTemplate | ChatOllama)" in js

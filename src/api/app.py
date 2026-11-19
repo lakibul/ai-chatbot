@@ -25,6 +25,7 @@ from starlette.concurrency import iterate_in_threadpool
 from .. import config
 from ..chat.engine import ChatEngine
 from ..chat.llm import LLMUnavailable, list_models
+from ..chat.backend import name as backend_name
 from ..chat.memory import ConversationStore
 from ..retrieve.pipeline import Retriever
 from .errors import error_frame, log_exception, log_request, sse
@@ -110,6 +111,7 @@ async def health() -> JSONResponse:
                    "rewrite": config.REWRITE_MODEL,
                    "reranker": config.RERANKER_MODEL},
         "conversations": len(state["store"]),
+        "backend": backend_name(),     # "native" or "langchain": never a guess
     }
     return JSONResponse(body, status_code=200 if body["ok"] else 503)
 

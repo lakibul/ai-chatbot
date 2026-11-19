@@ -612,6 +612,28 @@
     font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;
     color:var(--muted);margin:26px 0 10px;
   }
+  /* LangChain diagrams (architecture.js). Colours come from the page tokens, so
+     they follow light/dark. Blue = LangChain, plain = our code, dashed = another
+     program, amber = a safeguard. */
+  /* On a phone the diagram scrolls sideways instead of shrinking to unreadable text. */
+  .lcwrap{overflow-x:auto;margin:0 0 20px;border:1px solid var(--line);border-radius:8px;
+          background:var(--bg);-webkit-overflow-scrolling:touch;}
+  .lcsvg{display:block;width:100%;min-width:720px;height:auto;margin:0;}
+  .lchint{display:none;font-size:11.5px;color:var(--muted);margin:0 0 6px;}
+  @media (max-width:760px){.lchint{display:block;}}
+  .lcsvg rect{fill:var(--raise);stroke:var(--line);stroke-width:1.2;}
+  .lcsvg rect.grp{fill:none;stroke:var(--line);stroke-dasharray:none;stroke-width:1.2;}
+  .lcsvg rect.own{fill:var(--raise);stroke:var(--line);}
+  .lcsvg rect.key{fill:var(--raise);stroke:var(--accent);stroke-width:1.8;}
+  .lcsvg rect.lc{fill:var(--active);stroke:var(--accent);stroke-width:1.8;}
+  .lcsvg rect.ext{fill:none;stroke:var(--muted);stroke-dasharray:5 4;}
+  .lcsvg rect.warn{fill:var(--warn-bg);stroke:var(--warn-line);}
+  .lcsvg text{font-family:"Segoe UI",system-ui,-apple-system,Roboto,"Noto Sans Bengali",sans-serif;}
+  .lcsvg .t{fill:var(--ink);font-size:13.5px;font-weight:600;}
+  .lcsvg .s{fill:var(--muted);font-size:11.5px;}
+  .lcsvg .s2{fill:var(--ink-2);font-size:12px;}
+  .lcsvg .edge{fill:none;stroke:var(--muted);stroke-width:1.5;}
+  .lcsvg .head{fill:var(--muted);}
 
   @media (max-width:860px){
     .sidebar{position:fixed;inset:0 auto 0 0;z-index:40;transform:translateX(-100%);

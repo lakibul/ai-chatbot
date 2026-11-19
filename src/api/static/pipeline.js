@@ -194,8 +194,8 @@
         : 'Already stands alone, used as asked',
       raw: (d, c) => {
         if (d.skipped) return [c.note('No model call was made. ' + (d.reason || ''))];
-        const out = [c.kv([['Model', d.model], ['Tokens read', d.prompt_tokens], ['Tokens written', d.output_tokens],
-                           ['Seconds', d.seconds]])];
+        const out = [c.kv([['Model', d.model], ['Called through', through(d.backend)], ['Tokens read', d.prompt_tokens],
+                           ['Tokens written', d.output_tokens], ['Seconds', d.seconds]])];
         if (d.system_prompt) out.push(c.block('System prompt (shown because TRACE_SHOW_SYSTEM_PROMPT is on)', d.system_prompt));
         else out.push(c.note('The rewriter’s instructions are withheld, like the main assistant’s.'));
         out.push(c.block('Sent to the model', d.input));
@@ -288,7 +288,7 @@
       sum: (d) => plural(d.prompt_tokens || 0, 'token') + ' read in ' + num(d.prefill_s, 1) + ' s, ' +
         plural(d.output_tokens || 0, 'token') + ' written in ' + num(d.generate_s, 1) + ' s',
       raw: (d, c) => [
-        c.kv([['Tokens read', d.prompt_tokens], ['Read speed (tokens/s)', d.read_tokens_per_s],
+        c.kv([['Called through', through(d.backend)], ['Tokens read', d.prompt_tokens], ['Read speed (tokens/s)', d.read_tokens_per_s],
               ['Tokens written', d.output_tokens], ['Write speed (tokens/s)', d.write_tokens_per_s],
               ['Model load (s)', d.load_s]]),
         c.kv(Object.keys(d.options || {}).map((k) => ['option ' + k, d.options[k]])),
@@ -329,12 +329,22 @@
   ];
   /* The algorithm or library behind each step, shown as an outlined tag. A step
      that also runs a model gets a filled tag with the model's own name. */
+  /* Which code reached Ollama for this message. The trace carries it, so an
+     old server (no field) and a skipped rewrite fall back to the plain label. */
+  function modelTech(f) {
+    const b = f && f.data && f.data.backend;
+    return b === 'langchain' ? 'LangChain · ChatOllama' : 'Ollama';
+  }
+  function through(b) {
+    return b === 'langchain' ? 'LangChain (ChatPromptTemplate | ChatOllama)'
+      : b === 'native' ? 'Native client (httpx)' : null;
+  }
   const TECH = {
     input: 'engine.py',
     smalltalk: 'phrase list',
     guard: 'regex patterns',
     memory: 'memory.py',
-    rewrite: 'Ollama',
+    rewrite: (f) => modelTech(f),
     bm25: 'BM25 · rank_bm25',
     vector: 'Qdrant · cosine',
     fuse: (f) => 'RRF' + (f && f.data && f.data.k ? ' · k=' + f.data.k : ' · rank fusion'),
@@ -343,7 +353,7 @@
     rerank: 'cross-encoder · ONNX Runtime',
     floor: 'score threshold',
     prompt: 'prompts.py',
-    llm: 'Ollama',
+    llm: (f) => modelTech(f),
     cite: 'citation parser',
     save: 'JSON file',
     outcome: '',
